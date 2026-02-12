@@ -1,0 +1,33 @@
+name: Daily ASX Bullish Analysis
+
+on:
+  schedule:
+    - cron: '30 22 * * *'          # Runs at 22:30 UTC = 9:00 AM ACDT
+  workflow_dispatch:               # Lets you manually trigger it from GitHub UI
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily analysis
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_SHEETS_SCRIPT_URL: ${{ secrets.GOOGLE_SHEETS_SCRIPT_URL }}
+          GOOGLE_APP_SCRIPT_URL: ${{ secrets.GOOGLE_APP_SCRIPT_URL }}
+        run: python gem20.py
+
+      
