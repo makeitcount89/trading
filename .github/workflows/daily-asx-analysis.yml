@@ -2,8 +2,8 @@ name: Daily ASX Bullish Analysis
 
 on:
   schedule:
-    - cron: '30 22 * * *'          # Runs at 22:30 UTC = 9:00 AM ACDT
-  workflow_dispatch:               # Lets you manually trigger it from GitHub UI
+    - cron: '30 22 * * *'          # 22:30 UTC = 9:00 AM ACDT
+  workflow_dispatch:               # Allows manual trigger from GitHub UI
 
 jobs:
   analyze:
@@ -23,11 +23,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run daily analysis
+      # Step 1: Run N2.py first (this generates / uploads the CSV)
+      - name: Generate daily CSV with N2.py
+        env:
+          # Add any secrets N2.py needs (add more if required)
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # If N2.py needs other env vars, add them here
+        run: python N2.py
+
+      # Step 2: Wait 5 seconds (gives time for CSV upload / propagation)
+      - name: Wait 5 seconds for CSV to be ready
+        run: sleep 5
+
+      # Step 3: Now run gem20.py (it should now find the CSV remotely or locally)
+      - name: Analyze announcements with gem20.py
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_SHEETS_SCRIPT_URL: ${{ secrets.GOOGLE_SHEETS_SCRIPT_URL }}
           GOOGLE_APP_SCRIPT_URL: ${{ secrets.GOOGLE_APP_SCRIPT_URL }}
         run: python gem20.py
 
-      
+     
