@@ -6,3 +6,6 @@ flask
 flask-cors
 yfinance
 numpy
+beautifulsoup4
+matplotlib
+pytz
