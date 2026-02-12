@@ -1,0 +1,8 @@
+python-dotenv
+requests
+google-generativeai
+pandas
+flask
+flask-cors
+yfinance
+numpy
