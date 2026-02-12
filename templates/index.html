@@ -1,0 +1,1908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Market Analysis Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .dashboard {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        label {
+            font-weight: 600;
+            color: #34495e;
+            font-size: 0.9em;
+        }
+        
+        select, input, button {
+            padding: 10px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.2);
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-value {
+            font-size: 2.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        #dataTable {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+        }
+        
+        #dataTable th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9em;
+        }
+        
+        #dataTable td {
+            padding: 15px;
+            border-bottom: 1px solid #e1e8ed;
+            color: #34495e;
+        }
+        
+        #dataTable tr:hover {
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+        
+        .positive {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .negative {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+            padding: 20px;
+        }
+        
+        .analysis-card {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+        }
+        
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .analysis-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .analysis-section h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+        
+        .analysis-section p {
+            color: #34495e;
+            line-height: 1.6;
+            margin: 0;
+        }
+        
+        .clickable-row {
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .clickable-row:hover {
+            background-color: rgba(102, 126, 234, 0.15) !important;
+        }
+        
+        .selected-row {
+            background-color: rgba(102, 126, 234, 0.2) !important;
+        }
+        
+        .confidence-high {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .confidence-medium {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        
+        .confidence-low {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        
+        .surprise-high {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .surprise-medium {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .surprise-low {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .analysis-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            #dataTable {
+                font-size: 0.8em;
+            }
+            
+            #dataTable th, #dataTable td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Stock Market Analysis Dashboard</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="dateFilter">Filter by Date:</label>
+                <select id="dateFilter">
+                    <option value="">All Dates</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="tickerFilter">Filter by Ticker:</label>
+                <select id="tickerFilter">
+                    <option value="">All Tickers</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="bullishScoreFilter">Bullish Score:</label>
+                <select id="bullishScoreFilter">
+                    <option value="">All Scores</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="shortInterestFilter">Short % =:</label>
+                <select id="shortInterestFilter">
+                    <option value="">All Short %</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="predictedPercentFilter">Predicted % =:</label>
+                <select id="predictedPercentFilter">
+                    <option value="">All Predicted %</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="confidenceFilter">Confidence:</label>
+                <select id="confidenceFilter">
+                    <option value="">All Confidence</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="peFilter">PE Ratio:</label>
+                <select id="peFilter">
+                    <option value="">All PE</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="sma30Filter">Price vs SMA30 %:</label>
+                <select id="sma30Filter">
+                    <option value="">All SMA30 %</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="priceFilter">Stock Price:</label>
+                <select id="priceFilter">
+                    <option value="">All Prices</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="searchInput">Search:</label>
+                <input type="text" id="searchInput" placeholder="Search titles or tickers...">
+            </div>
+            <button onclick="resetFilters()">Reset Filters</button>
+        </div>
+        
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-value" id="totalRecords">0</div>
+                <div class="stat-label">Total Records</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avgPredicted">0%</div>
+                <div class="stat-label">Avg Predicted Change</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avgActual">0%</div>
+                <div class="stat-label">Avg Actual Change</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="accuracyRate">0%</div>
+                <div class="stat-label">Prediction Accuracy</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <div class="chart-title">Performance by Ticker</div>
+            <canvas id="tickerChart" width="400" height="300"></canvas>
+        </div>
+        
+        <div class="chart-container">
+            <div class="chart-title">Stock Data Table</div>
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Ticker</th>
+                        <th>Short %</th>
+                        <th>Predicted %</th>
+                        <th>Actual %</th>
+                        <th>Weekly %</th>
+                        <th>Title</th>
+                        <th>Bullish Score</th>
+                        <th>URL</th>
+                        <th>Surprise Level</th>
+                        <th>Confidence</th>
+                        <th>Key Positive Factors</th>
+                        <th>Financial Highlights</th>
+                        <th>Future Outlook</th>
+                        <th>Market Impact</th>
+                        <th>Risk Factors</th>
+                        <th>Market Expectation Comparison</th>
+                        <th>Reasoning Summary</th>
+                        <th>Current Price $</th>
+                        <th>Market Cap</th>
+                        <th>PE</th>
+                        <th>Volume Ratio</th>
+                        <th>RSI_14</th>
+                        <th>Price vs SMA30 %</th>
+                        <th>Vol Annual %</th>
+                        <th>Sector</th>
+                        <th>Industry</th>
+                        <th>Price to 52w High %</th>
+                        <th>Price to 52w Low %</th>
+                        <th>Beta</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="30" class="loading">Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">Detailed Analysis View</div>
+            <div id="detailedAnalysis" style="display: none;">
+                <div class="analysis-card">
+                    <h3 id="analysisTitle">Select a stock from the table above to view detailed analysis</h3>
+                    <div class="analysis-grid">
+                        <div class="analysis-section">
+                            <h4>Future Outlook</h4>
+                            <p id="futureOutlook">-</p>
+                        </div>
+                        <div class="analysis-section">
+                            <h4>Market Expectations Comparison</h4>
+                            <p id="marketExpectations">-</p>
+                        </div>
+                        <div class="analysis-section">
+                            <h4>Reasoning Summary</h4>
+                            <p id="reasoningSummary">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stockData = [];
+        let filteredData = [];
+        let charts = {};
+        
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/1Nbk1IyavrHbAETxSB_d3TfTjSj2EHsNuwoEHke3qGmU/export?format=csv&gid=0';
+
+
+        // --- Core Functions ---
+        
+        async function fetchData() {
+    try {
+        const response = await fetch(csvUrl);
+        const data = await response.text();
+        stockData = parseCSV(data);
+
+        // 🔧 Normalize all date formats to DD/MM/YYYY
+        stockData.forEach(row => {
+            if (row.date) {
+                let d = row.date.trim();
+
+                // Handle ISO (YYYY-MM-DD)
+                if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+                    const [year, month, day] = d.split('-');
+                    row.date = `${day}/${month}/${year}`;
+                }
+                // Handle DD/MM/YYYY (already fine)
+                else if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) {
+                    // do nothing
+                }
+                // Handle possible MM/DD/YYYY
+                else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
+                    const [m, day, year] = d.split('/');
+                    row.date = `${day}/${m}/${year}`;
+                }
+                else {
+                    console.warn("⚠️ Unrecognized date format:", d);
+                }
+            }
+        });
+
+        // 🔽 Sort by date descending (newest first)
+        stockData.sort((a, b) => {
+            const [da, ma, ya] = a.date.split('/').map(Number);
+            const [db, mb, yb] = b.date.split('/').map(Number);
+            return new Date(yb, mb - 1, db) - new Date(ya, ma - 1, da);
+        });
+
+        filteredData = [...stockData];
+
+        // Initialize dashboard components
+        populateFilters();
+        updateStatistics();
+        createCharts();
+        updateTable();
+    } catch (error) {
+        console.error('Error fetching CSV data:', error);
+        document.getElementById('tableBody').innerHTML = `
+            <tr>
+                <td colspan="30" class="loading">
+                    Failed to load data. Please ensure you are running a local web server to bypass CORS.
+                </td>
+            </tr>`;
+    }
+}
+function parseCSV8(csv) {
+    // Normalize line endings
+    csv = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    const lines = [];
+    let currentLine = [];
+    let currentField = '';
+    let insideQuotes = false;
+    
+    for (let i = 0; i < csv.length; i++) {
+        const char = csv[i];
+        const nextChar = csv[i + 1];
+        
+        if (char === '"') {
+            if (insideQuotes && nextChar === '"') {
+                currentField += '"';
+                i++;
+            } else {
+                insideQuotes = !insideQuotes;
+            }
+        } else if (char === '\t' && !insideQuotes) {
+            currentLine.push(currentField);
+            currentField = '';
+        } else if (char === '\n' && !insideQuotes) {
+            currentLine.push(currentField);
+            lines.push(currentLine);
+            currentLine = [];
+            currentField = '';
+        } else {
+            currentField += char;
+        }
+    }
+    
+    if (currentField.length > 0 || currentLine.length > 0) {
+        currentLine.push(currentField);
+        lines.push(currentLine);
+    }
+    
+    const nonEmptyLines = lines.filter(line => 
+        line.some(cell => cell.trim().length > 0)
+    );
+    
+    if (nonEmptyLines.length === 0) {
+        return [];
+    }
+    
+    const headers = nonEmptyLines[0].map(h => h.trim().toLowerCase());
+    
+    // Define which columns should be converted to numbers
+    const numericColumns = new Set([
+        'predicted daily % change',
+        'actual daily % change',
+        'actual weekly % change',
+        'bullish score',
+        'confidence',
+        'current price $',
+        'market cap',
+        'pe',
+        'volume ratio',
+        'rsi_14',
+        'price vs sma30 pct',
+        'vol annual pct',
+        'price to 52w high pct',
+        'price to 52w low pct',
+        'beta'
+    ]);
+    
+    const data = [];
+    for (let i = 1; i < nonEmptyLines.length; i++) {
+        const values = nonEmptyLines[i];
+        const row = {};
+        
+        for (let j = 0; j < headers.length; j++) {
+            const header = headers[j];
+            let value = values[j] ? values[j].trim() : '';
+            
+            // Convert numeric columns to numbers
+            if (numericColumns.has(header)) {
+                if (value === '' || value === 'N/A' || value === '#N/A') {
+                    row[header] = null;
+                } else {
+                    // Remove % sign and parse
+                    const cleaned = value.replace('%', '').replace(/,/g, '');
+                    const numValue = parseFloat(cleaned);
+                    row[header] = isNaN(numValue) ? value : numValue;
+                }
+            } else {
+                row[header] = value;
+            }
+        }
+        
+        if (row.ticker && row.ticker.trim().length > 0) {
+            data.push(row);
+        }
+    }
+    
+    console.log('Data rows parsed:', data.length);
+    if (data.length > 0) {
+        console.log('Sample row:', data[0]);
+        console.log('Numeric values check:', {
+            predicted: data[0]['predicted daily % change'],
+            actual: data[0]['actual daily % change'],
+            confidence: data[0]['confidence']
+        });
+    }
+    
+    return data;
+}
+function parseCSV7(csv) {
+    // Normalize line endings
+    csv = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    const lines = [];
+    let currentLine = [];
+    let currentField = '';
+    let insideQuotes = false;
+    
+    for (let i = 0; i < csv.length; i++) {
+        const char = csv[i];
+        const nextChar = csv[i + 1];
+        
+        if (char === '"') {
+            if (insideQuotes && nextChar === '"') {
+                currentField += '"';
+                i++;
+            } else {
+                insideQuotes = !insideQuotes;
+            }
+        } else if (char === '\t' && !insideQuotes) {
+            currentLine.push(currentField);
+            currentField = '';
+        } else if (char === '\n' && !insideQuotes) {
+            currentLine.push(currentField);
+            lines.push(currentLine);
+            currentLine = [];
+            currentField = '';
+        } else {
+            currentField += char;
+        }
+    }
+    
+    if (currentField.length > 0 || currentLine.length > 0) {
+        currentLine.push(currentField);
+        lines.push(currentLine);
+    }
+    
+    const nonEmptyLines = lines.filter(line => 
+        line.some(cell => cell.trim().length > 0)
+    );
+    
+    if (nonEmptyLines.length === 0) {
+        return [];
+    }
+    
+    const headers = nonEmptyLines[0].map(h => h.trim().toLowerCase());
+    
+    // Define which columns should be converted to numbers
+    const numericColumns = [
+        'short%',
+        'predicted daily % change',
+        'actual daily % change',
+        'actual weekly % change',
+        'bullish score',
+        'confidence',
+        'current price $',
+        'market cap',
+        'pe',
+        'volume ratio',
+        'rsi_14',
+        'price vs sma30 pct',
+        'vol annual pct',
+        'price to 52w high pct',
+        'price to 52w low pct',
+        'beta'
+    ];
+    
+    const data = [];
+    for (let i = 1; i < nonEmptyLines.length; i++) {
+        const values = nonEmptyLines[i];
+        const row = {};
+        
+        for (let j = 0; j < headers.length; j++) {
+            const header = headers[j];
+            let value = values[j] ? values[j].trim() : '';
+            
+            // Convert numeric columns to numbers
+            if (numericColumns.includes(header) && value) {
+                // Remove % sign if present
+                value = value.replace('%', '');
+                const numValue = parseFloat(value);
+                row[header] = isNaN(numValue) ? value : numValue;
+            } else {
+                row[header] = value;
+            }
+        }
+        
+        if (row.ticker && row.ticker.trim().length > 0) {
+            data.push(row);
+        }
+    }
+    
+    console.log('Data rows parsed:', data.length);
+    if (data.length > 0) {
+        console.log('Sample row:', data[0]);
+    }
+    
+    return data;
+}
+function parseCSV(csv) {
+    const rows = [];
+    let field = '';
+    let record = [];
+    let inQuotes = false;
+    
+    // Normalize line endings
+    csv = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Detect delimiter - check first line for tabs or commas
+    const firstLineEnd = csv.indexOf('\n');
+    const firstLine = csv.substring(0, firstLineEnd);
+    const hasTab = firstLine.includes('\t');
+    const delimiter = hasTab ? '\t' : ',';
+    
+    // Parse character-by-character
+    for (let i = 0; i < csv.length; i++) {
+        const char = csv[i];
+        const next = csv[i + 1];
+        
+        if (char === '"') {
+            if (inQuotes && next === '"') {
+                field += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === delimiter && !inQuotes) {
+            record.push(field);
+            field = '';
+        } else if (char === '\n' && !inQuotes) {
+            record.push(field);
+            rows.push(record);
+            record = [];
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+    
+    // Push last record if exists
+    if (field || record.length) {
+        record.push(field);
+        rows.push(record);
+    }
+    
+    // Filter out completely empty rows
+    const nonEmptyRows = rows.filter(r => r.some(cell => cell && cell.trim()));
+    
+    if (nonEmptyRows.length === 0) {
+        return [];
+    }
+    
+    // Get headers - clean them but preserve all columns
+    const headerRow = nonEmptyRows[0];
+    const headers = headerRow.map((h, idx) => {
+        const cleaned = h.trim().toLowerCase().replace(/\s+/g, ' ');
+        // If header is empty, use column index
+        return cleaned || `column_${idx}`;
+    });
+    
+    console.log('Total columns:', headers.length);
+    console.log('Headers:', headers);
+    
+    // Parse data rows
+    const data = nonEmptyRows.slice(1)
+        .map((values, rowIdx) => {
+            const row = {};
+            
+            // Map all values to headers
+            headers.forEach((header, i) => {
+                const value = (values[i] || '').trim();
+                row[header] = value;
+            });
+            
+            // Only return rows with a ticker
+            if (row.ticker && row.ticker.trim()) {
+                return row;
+            }
+            return null;
+        })
+        .filter(Boolean);
+    
+    console.log('Parsed data rows:', data.length);
+    if (data.length > 0) {
+        console.log('First row keys:', Object.keys(data[0]));
+        console.log('First row sample:', data[0]);
+    }
+    
+    return data;
+}
+function parseCSV5(csv) {
+    const rows = [];
+    let field = '';
+    let record = [];
+    let inQuotes = false;
+    
+    // Normalize line endings
+    csv = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Detect delimiter - check first line for tabs or commas
+    const firstLineEnd = csv.indexOf('\n');
+    const firstLine = csv.substring(0, firstLineEnd);
+    const hasTab = firstLine.includes('\t');
+    const delimiter = hasTab ? '\t' : ',';
+    
+    console.log('Detected delimiter:', delimiter === '\t' ? 'TAB' : 'COMMA');
+    
+    // Parse character-by-character
+    for (let i = 0; i < csv.length; i++) {
+        const char = csv[i];
+        const next = csv[i + 1];
+        
+        if (char === '"') {
+            if (inQuotes && next === '"') {
+                // Escaped quote - add single quote to field
+                field += '"';
+                i++; // Skip next quote
+            } else {
+                // Toggle quote state
+                inQuotes = !inQuotes;
+            }
+        } else if (char === delimiter && !inQuotes) {
+            // Field separator
+            record.push(field);
+            field = '';
+        } else if (char === '\n' && !inQuotes) {
+            // End of record
+            record.push(field);
+            if (record.some(cell => cell && cell.trim())) {
+                rows.push(record);
+            }
+            record = [];
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+    
+    // Push last record if exists
+    if (field || record.length) {
+        record.push(field);
+        if (record.some(cell => cell && cell.trim())) {
+            rows.push(record);
+        }
+    }
+    
+    console.log('Total rows parsed:', rows.length);
+    console.log('First row (headers):', rows[0]);
+    
+    // Get headers and clean them
+    const headers = rows[0].map(h => h.trim().toLowerCase());
+    console.log('Processed headers:', headers);
+    
+    // Remove header row
+    rows.shift();
+    
+    // Parse data rows
+    const data = rows
+        .filter(r => r.some(cell => cell && cell.trim()))
+        .map((values, idx) => {
+            const row = {};
+            headers.forEach((header, i) => {
+                const value = values[i] || '';
+                row[header] = value.trim();
+            });
+            
+            // Only return rows with a ticker
+            if (row.ticker && row.ticker.trim()) {
+                return row;
+            }
+            return null;
+        })
+        .filter(Boolean);
+    
+    console.log('Data rows with ticker:', data.length);
+    console.log('Sample row:', data[0]);
+    
+    return data;
+}
+function parseCSV5(csv) {
+    const rows = [];
+    let field = '';
+    let record = [];
+    let inQuotes = false;
+    
+    // Normalize line endings
+    csv = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Parse character-by-character
+    for (let i = 0; i < csv.length; i++) {
+        const char = csv[i];
+        const next = csv[i + 1];
+        
+        if (char === '"') {
+            if (inQuotes && next === '"') {
+                // Escaped quote - add single quote to field
+                field += '"';
+                i++; // Skip next quote
+            } else {
+                // Toggle quote state
+                inQuotes = !inQuotes;
+            }
+        } else if (char === '\t' && !inQuotes) {
+            // Tab is the delimiter (not comma!)
+            record.push(field);
+            field = '';
+        } else if (char === '\n' && !inQuotes) {
+            // End of record
+            record.push(field);
+            if (record.some(cell => cell && cell.trim())) {
+                rows.push(record);
+            }
+            record = [];
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+    
+    // Push last record if exists
+    if (field || record.length) {
+        record.push(field);
+        if (record.some(cell => cell && cell.trim())) {
+            rows.push(record);
+        }
+    }
+    
+    // Get headers and clean them
+    const headers = rows.shift().map(h => h.trim().toLowerCase());
+    
+    // Parse data rows
+    const data = rows
+        .filter(r => r.some(cell => cell && cell.trim()))
+        .map(values => {
+            const row = {};
+            headers.forEach((header, i) => {
+                const value = values[i] || '';
+                row[header] = value.trim();
+            });
+            
+            // Only return rows with a ticker
+            if (row.ticker && row.ticker.trim()) {
+                return row;
+            }
+            return null;
+        })
+        .filter(Boolean);
+    
+    return data;
+}
+function parseCSV4(csv) {
+    const rows = [];
+    let current = '';
+    let inQuotes = false;
+    let field = '';
+    let record = [];
+
+    // Normalize line endings
+    csv = csv.replace(/\r\n/g, '\n');
+
+    // Parse character-by-character
+    for (let i = 0; i < csv.length; i++) {
+        const char = csv[i];
+        const next = csv[i + 1];
+
+        if (char === '"') {
+            if (inQuotes && next === '"') {
+                // Escaped quote
+                field += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            record.push(field.trim());
+            field = '';
+        } else if (char === '\n' && !inQuotes) {
+            record.push(field.trim());
+            rows.push(record);
+            record = [];
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+
+    // Push last record if exists
+    if (field || record.length) {
+        record.push(field.trim());
+        rows.push(record);
+    }
+
+    const headers = rows.shift().map(h => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
+
+    const data = rows
+        .filter(r => r.some(cell => cell && cell.trim())) // skip blank rows
+        .map(values => {
+            const row = {};
+            headers.forEach((header, i) => {
+                row[header] = values[i] ? values[i].replace(/^["']|["']$/g, '') : '';
+            });
+
+            if (row.ticker && row.ticker.trim()) {
+                row.ticker = String(row.ticker).trim().toUpperCase();
+                if (row[''] && !row['reasoning summary']) {
+                    row['reasoning summary'] = row[''];
+                }
+                return row;
+            }
+            return null;
+        })
+        .filter(Boolean);
+
+    return data;
+}
+
+function parseCSV3(csv) {
+    const lines = csv.trim().split('\n');
+    const headers = lines[0]
+        .split(',')
+        .map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
+    
+    const data = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim() || line.split(',').every(cell => !cell.trim())) continue;
+
+        const values = [];
+        let currentValue = '';
+        let inQuotes = false;
+
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                values.push(currentValue.trim().replace(/^["']|["']$/g, ''));
+                currentValue = '';
+            } else {
+                currentValue += char;
+            }
+        }
+        values.push(currentValue.trim().replace(/^["']|["']$/g, ''));
+
+        // Create row object
+        const row = {};
+        headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+        });
+
+        // ✅ Normalize and keep ticker as string
+        if (row.ticker && String(row.ticker).trim()) {
+            row.ticker = String(row.ticker).trim().toUpperCase();
+
+            // Handle Reasoning Summary from unnamed column
+            if (row[''] && !row['reasoning summary']) {
+                row['reasoning summary'] = row[''];
+            }
+
+            data.push(row);
+        }
+    }
+
+    return data;
+}
+
+        function parseCSV2(csv) {
+            const lines = csv.trim().split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                if (!line.trim() || line.split(',').every(cell => !cell.trim())) continue;
+                
+                const values = [];
+                let currentValue = '';
+                let inQuotes = false;
+                
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        values.push(currentValue.trim());
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                values.push(currentValue.trim());
+                
+                if (values.length >= headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    
+                    // Only add rows with actual data
+                    if (row.ticker && row.ticker.trim()) {
+                        // Handle unnamed column as Reasoning Summary
+                        row['Reasoning Summary'] = row[''] || '';
+                        data.push(row);
+                    }
+                }
+            }
+            
+            return data;
+        }
+
+        // Populate filter dropdowns with unique values
+        function populateFilters() {
+            const dateFilter = document.getElementById('dateFilter');
+            const tickerFilter = document.getElementById('tickerFilter');
+            const bullishScoreFilter = document.getElementById('bullishScoreFilter');
+            const shortInterestFilter = document.getElementById('shortInterestFilter');
+            const predictedPercentFilter = document.getElementById('predictedPercentFilter');
+            const confidenceFilter = document.getElementById('confidenceFilter');
+            const peFilter = document.getElementById('peFilter');
+            const sma30Filter = document.getElementById('sma30Filter');
+            const priceFilter = document.getElementById('priceFilter');
+
+            // Populate Date filter
+            const uniqueDates = [...new Set(stockData.map(d => d.date))].filter(d => d).sort();
+            uniqueDates.forEach(date => {
+                const option = document.createElement('option');
+                option.value = date;
+                option.textContent = date;
+                dateFilter.appendChild(option);
+            });
+
+            // Populate Ticker filter
+            const uniqueTickers = [
+  ...new Set(stockData.map(d => String(d.ticker).trim().toUpperCase()))
+].filter(t => t && /^[A-Z0-9]+$/.test(t))
+ .sort();
+
+            uniqueTickers.forEach(ticker => {
+                const option = document.createElement('option');
+                option.value = ticker;
+                option.textContent = ticker;
+                tickerFilter.appendChild(option);
+            });
+            
+           // Populate Bullish Score filter (showing "greater than or equal to" values)
+for (let i = 0; i <= 10; i++) {
+    const option = document.createElement('option');
+    option.value = i; // numeric threshold
+    option.textContent = `≥ ${i}`; // show "greater than or equal to"
+    bullishScoreFilter.appendChild(option);
+}
+
+
+            // Populate Short % filter (including "less than or equal to" values)
+for (let i = 0; i <= 10; i++) {
+    const option = document.createElement('option');
+    option.value = i; // actual numeric value
+    option.textContent = `≤ ${i}%`; // display with "less than or equal to" symbol
+    shortInterestFilter.appendChild(option);
+}
+
+
+            // Populate Predicted % filter
+            const predictedValues = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35];
+            predictedValues.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value + '%';
+                predictedPercentFilter.appendChild(option);
+            });
+
+            // Populate Confidence filter
+            for (let i = 0; i <= 5; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                confidenceFilter.appendChild(option);
+            }
+
+            // Populate PE filter
+            const peRanges = [
+                { value: '0-10', text: '0 to 10' },
+                { value: '10-20', text: '10 to 20' },
+                { value: '20-30', text: '20 to 30' },
+                { value: '30-40', text: '30 to 40' },
+                { value: '40+', text: '40+' },
+                { value: 'N/A', text: 'N/A' }
+            ];
+            peRanges.forEach(range => {
+                const option = document.createElement('option');
+                option.value = range.value;
+                option.textContent = range.text;
+                peFilter.appendChild(option);
+            });
+
+            // Populate Price vs SMA30 % filter
+            const sma30Ranges = [
+                { value: '<-5', text: '< -5%' },
+                { value: '-5-0', text: '-5 to 0%' },
+                { value: '0-5', text: '0 to 5%' },
+                { value: '5-10', text: '5 to 10%' },
+                { value: '10+', text: '> 10%' }
+            ];
+            sma30Ranges.forEach(range => {
+                const option = document.createElement('option');
+                option.value = range.value;
+                option.textContent = range.text;
+                sma30Filter.appendChild(option);
+            });
+
+            // Populate Stock Price filter
+            const priceRanges = [
+                { value: '>=0', text: '>= $0' },
+		{ value: '<1', text: '< $1' },
+		{ value: '>=1', text: '>= $1' },
+		{ value: '>=2', text: '>= $2' },
+		{ value: '>=3', text: '>= $3' },
+		{ value: '>=5', text: '>= $5' },
+                { value: '>=10', text: '>= $10' },
+                { value: '>=50', text: '>= $50' },
+                { value: '>=100', text: '>= $100' },
+                { value: '<=10', text: '<= $10' },
+                { value: '<=50', text: '<= $50' },
+                { value: '<=100', text: '<= $100' }
+            ];
+            priceRanges.forEach(range => {
+                const option = document.createElement('option');
+                option.value = range.value;
+                option.textContent = range.text;
+                priceFilter.appendChild(option);
+            });
+            
+            // Add event listeners for all filters
+            dateFilter.addEventListener('change', applyFilters);
+            tickerFilter.addEventListener('change', applyFilters);
+            bullishScoreFilter.addEventListener('change', applyFilters);
+            shortInterestFilter.addEventListener('change', applyFilters);
+            predictedPercentFilter.addEventListener('change', applyFilters);
+            confidenceFilter.addEventListener('change', applyFilters);
+            peFilter.addEventListener('change', applyFilters);
+            sma30Filter.addEventListener('change', applyFilters);
+            priceFilter.addEventListener('change', applyFilters);
+            document.getElementById('searchInput').addEventListener('input', applyFilters);
+        }
+        
+        // Apply all filters and update the dashboard
+        function applyFilters() {
+            const date = document.getElementById('dateFilter').value;
+            const ticker = document.getElementById('tickerFilter').value;
+            const bullishScoreValue = document.getElementById('bullishScoreFilter').value;
+            const shortInterestValue = document.getElementById('shortInterestFilter').value;
+            const predictedPercentValue = document.getElementById('predictedPercentFilter').value;
+            const confidenceValue = document.getElementById('confidenceFilter').value;
+            const peValue = document.getElementById('peFilter').value;
+            const sma30Value = document.getElementById('sma30Filter').value;
+            const priceValue = document.getElementById('priceFilter').value;
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+            filteredData = stockData.filter(d => {
+                const dateMatch = !date || d.date === date;
+                const tickerMatch = !ticker || d.ticker === ticker;
+                const searchMatch = !searchTerm || d.Title.toLowerCase().includes(searchTerm) || d.ticker.toLowerCase().includes(searchTerm);
+
+                const bullishScoreMatch = !bullishScoreValue || parseInt(d['bullish score']) >= parseInt(bullishScoreValue);
+
+
+                // Short interest - greater than or equal to
+                const shortInterestMatch = !shortInterestValue || parseFloat(d['short%']) <= parseFloat(shortInterestValue);
+
+                // Predicted percentage - greater than or equal to
+                const predictedPercentMatch = !predictedPercentValue || parseFloat(d['predicted daily % change']) >= parseFloat(predictedPercentValue);
+
+                // Confidence - exact match
+                const confidenceMatch = !confidenceValue || parseInt(d['confidence']) === parseInt(confidenceValue);
+
+                // PE - range match
+                let peMatch = true;
+                if (peValue) {
+                    const pe = d['pe'] === 'N/A' ? 'N/A' : parseFloat(d['pe']);
+                    if (peValue === 'N/A') {
+                        peMatch = d['pe'] === 'N/A';
+                    } else if (pe !== 'N/A' && !isNaN(pe)) {
+                        const [min, max] = peValue.split('-').map(Number);
+                        if (peValue === '40+') {
+                            peMatch = pe >= 40;
+                        } else {
+                            peMatch = pe >= min && (max ? pe < max : true);
+                        }
+                    } else {
+                        peMatch = false;
+                    }
+                }
+
+                // Price vs SMA30 % - range match
+                let sma30Match = true;
+                if (sma30Value) {
+                    const sma30 = parseFloat(d['price vs sma30 pct']);
+                    if (!isNaN(sma30)) {
+                        if (sma30Value === '<-5') {
+                            sma30Match = sma30 < -5;
+                        } else if (sma30Value === '10+') {
+                            sma30Match = sma30 >= 10;
+                        } else {
+                            const [min, max] = sma30Value.split('-').map(Number);
+                            sma30Match = sma30 >= min && sma30 < max;
+                        }
+                    } else {
+                        sma30Match = false;
+                    }
+                }
+
+                // Stock Price - range match
+                let priceMatch = true;
+                if (priceValue) {
+                    const price = parseFloat(d['current price $']);
+                    if (!isNaN(price)) {
+                        const [operator, value] = priceValue.split(/(>=|<=)/).filter(Boolean);
+                        const priceThreshold = parseFloat(value);
+                        if (operator === '>=') {
+                            priceMatch = price >= priceThreshold;
+                        } else if (operator === '<=') {
+                            priceMatch = price <= priceThreshold;
+                        }
+                    } else {
+                        priceMatch = false;
+                    }
+                }
+
+                return dateMatch && tickerMatch && searchMatch && bullishScoreMatch && shortInterestMatch && predictedPercentMatch && confidenceMatch && peMatch && sma30Match && priceMatch;
+            });
+            
+            updateStatistics();
+            updateCharts();
+            updateTable();
+        }
+
+        // Reset all filters and update dashboard
+        function resetFilters() {
+            document.getElementById('dateFilter').value = '';
+            document.getElementById('tickerFilter').value = '';
+            document.getElementById('bullishScoreFilter').value = '';
+            document.getElementById('shortInterestFilter').value = '';
+            document.getElementById('predictedPercentFilter').value = '';
+            document.getElementById('confidenceFilter').value = '';
+            document.getElementById('peFilter').value = '';
+            document.getElementById('sma30Filter').value = '';
+            document.getElementById('priceFilter').value = '';
+            document.getElementById('searchInput').value = '';
+            applyFilters();
+        }
+
+// Update statistical cards
+function updateStatistics() {
+    document.getElementById('totalRecords').textContent = filteredData.length;
+    if (filteredData.length === 0) {
+        document.getElementById('avgPredicted').textContent = '0%';
+        document.getElementById('avgActual').textContent = '0%';
+        document.getElementById('accuracyRate').textContent = '0%';
+        return;
+    }
+    
+    const predictedChanges = filteredData.map(d => parseFloat(d['predicted daily % change'])).filter(val => !isNaN(val));
+    const actualChanges = filteredData.map(d => parseFloat(d['actual daily % change'])).filter(val => !isNaN(val));
+    
+    const avgPredicted = predictedChanges.length ? (predictedChanges.reduce((sum, val) => sum + val, 0) / predictedChanges.length).toFixed(2) : 0;
+    const avgActual = actualChanges.length ? (actualChanges.reduce((sum, val) => sum + val, 0) / actualChanges.length).toFixed(2) : 0;
+    
+    let totalAccuracy = 0;
+    let validRecordsCount = 0;
+    
+    const allActuals = actualChanges.map(Math.abs);
+    const maxActualChange = Math.max(...allActuals);
+        
+    filteredData.forEach(d => {
+        const predicted = parseFloat(d['predicted daily % change']);
+        const actual = parseFloat(d['actual daily % change']);
+        
+        if (!isNaN(predicted) && !isNaN(actual)) {
+            let recordAccuracy = 0;
+            
+            if (predicted === 0) {
+                // If prediction is 0, accuracy is based on how small the actual change is.
+                // 100% accuracy if actual change is also 0, otherwise partial credit.
+                if (actual === 0) {
+                    recordAccuracy = 1;
+                } else if (maxActualChange > 0) {
+                    recordAccuracy = 1 - (Math.abs(actual) / maxActualChange);
+                } else {
+                    recordAccuracy = 0;
+                }
+            } else {
+                // For non-zero predictions, check direction and magnitude.
+                const predictedSign = Math.sign(predicted);
+                const actualSign = Math.sign(actual);
+                
+                if (predictedSign === actualSign) {
+                    // Correct direction
+                    const absPredicted = Math.abs(predicted);
+                    const absActual = Math.abs(actual);
+                                        
+                    // If actual exceeds predicted (in same direction), give 100% accuracy
+                    if (absActual >= absPredicted) {
+                        recordAccuracy = 1;
+                    } else {
+                        // If actual is less than predicted, use ratio-based accuracy
+                        recordAccuracy = absActual / absPredicted;
+                    }
+                } else {
+                    // Wrong direction, 0 accuracy
+                    recordAccuracy = 0;
+                }
+            }
+            
+            totalAccuracy += recordAccuracy;
+            validRecordsCount++;
+        }
+    });
+    
+    const avgAccuracyPercentage = validRecordsCount > 0 ? (totalAccuracy / validRecordsCount * 100).toFixed(2) : 0;
+    
+    document.getElementById('avgPredicted').textContent = `${avgPredicted}%`;
+    document.getElementById('avgActual').textContent = `${avgActual}%`;
+    document.getElementById('accuracyRate').textContent = `${avgAccuracyPercentage}%`;
+}
+
+// Create initial charts
+function createCharts() {
+    const tickerCtx = document.getElementById('tickerChart').getContext('2d');
+    
+    charts.tickerChart = new Chart(tickerCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Avg Predicted %',
+                data: [],
+                backgroundColor: 'rgba(52, 152, 219, 0.7)',
+            }, {
+                label: 'Avg Actual %',
+                data: [],
+                backgroundColor: 'rgba(231, 76, 60, 0.7)',
+            }, {
+                label: 'Avg Actual Weekly %',
+                data: [],
+                backgroundColor: 'rgba(39, 174, 96, 0.7)',
+            }, {
+                label: 'Avg Short %',
+                data: [],
+                type: 'line',
+                borderColor: 'rgba(155, 89, 182, 1)',
+                backgroundColor: 'rgba(155, 89, 182, 0.7)',
+                yAxisID: 'y'
+            }, {
+                label: 'Avg Bullish Score',
+                data: [],
+                type: 'line',
+                borderColor: 'rgba(243, 156, 18, 1)',
+                backgroundColor: 'rgba(243, 156, 18, 0.7)',
+                yAxisID: 'y1',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Change (%) / Short Interest (%)'
+                    }
+                },
+                y1: {
+                    beginAtZero: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Bullish Score'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                    min: 1,
+                    max: 9
+                }
+            }
+        }
+    });
+}       function updateCharts() {
+            const aggregatedData = filteredData.reduce((acc, d) => {
+                if (!acc[d.ticker]) {
+                    acc[d.ticker] = { 
+                        predictedSum: 0, 
+                        actualSum: 0, 
+                        actualWeeklySum: 0, 
+                        shortSum: 0,
+                        bullishScores: [], 
+                        count: 0 
+                    };
+                }
+                const predicted = parseFloat(d['predicted daily % change']);
+                const actual = parseFloat(d['actual daily % change']);
+                const actualWeekly = parseFloat(d['actual weekly % change']);
+                const short = parseFloat(d['short%']);
+                const bullish = parseInt(d['bullish score']);
+
+                if (!isNaN(predicted)) acc[d.ticker].predictedSum += predicted;
+                if (!isNaN(actual)) acc[d.ticker].actualSum += actual;
+                if (!isNaN(actualWeekly)) acc[d.ticker].actualWeeklySum += actualWeekly;
+                if (!isNaN(short)) acc[d.ticker].shortSum += short;
+                if (!isNaN(bullish)) acc[d.ticker].bullishScores.push(bullish);
+                acc[d.ticker].count++;
+                return acc;
+            }, {});
+
+            const tickerLabels = Object.keys(aggregatedData);
+            
+            // --- Update Ticker Performance Chart (tickerChart) ---
+            const avgPredictedData = tickerLabels.map(t => (aggregatedData[t].predictedSum / aggregatedData[t].count).toFixed(2));
+            const avgActualData = tickerLabels.map(t => (aggregatedData[t].actualSum / aggregatedData[t].count).toFixed(2));
+            const avgActualWeeklyData = tickerLabels.map(t => (aggregatedData[t].actualWeeklySum / aggregatedData[t].count).toFixed(2));
+            const avgShortData = tickerLabels.map(t => (aggregatedData[t].shortSum / aggregatedData[t].count).toFixed(2));
+            const avgBullishScoreData = tickerLabels.map(t => {
+                const scores = aggregatedData[t].bullishScores;
+                return scores.length > 0 ? (scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(2) : 0;
+            });
+
+            charts.tickerChart.data.labels = tickerLabels;
+            charts.tickerChart.data.datasets[0].data = avgPredictedData;
+            charts.tickerChart.data.datasets[1].data = avgActualData;
+            charts.tickerChart.data.datasets[2].data = avgActualWeeklyData;
+            charts.tickerChart.data.datasets[3].data = avgShortData;
+            charts.tickerChart.data.datasets[4].data = avgBullishScoreData;
+            charts.tickerChart.update();
+        }
+// Update the data table
+function updateTable() {
+    const tableBody = document.getElementById('tableBody');
+    tableBody.innerHTML = '';
+    if (filteredData.length === 0) {
+        const row = tableBody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 30;
+        cell.classList.add('loading');
+        cell.textContent = 'No data found.';
+        return;
+    }
+    filteredData.forEach((item, index) => {
+        const row = tableBody.insertRow();
+        row.classList.add('clickable-row');
+        row.setAttribute('data-index', index);
+        // Add click event listener for detailed view
+        row.addEventListener('click', () => showDetailedAnalysis(item, row));
+        
+        // Date
+        row.insertCell().textContent = item.date || '';
+        
+        // Ticker
+        row.insertCell().textContent = item.ticker || '';
+        
+        // Short %
+        row.insertCell().textContent = item['short%'] || '';
+        
+        // Predicted %
+        const predictedCell = row.insertCell();
+        predictedCell.textContent = item['predicted daily % change'] || '';
+        predictedCell.classList.add(parseFloat(item['predicted daily % change']) > 0 ? 'positive' : 'negative');
+        
+        // Actual %
+        const actualCell = row.insertCell();
+        actualCell.textContent = item['actual daily % change'] || '';
+        actualCell.classList.add(parseFloat(item['actual daily % change']) > 0 ? 'positive' : 'negative');
+        
+        // Weekly %
+        row.insertCell().textContent = item['actual weekly % change'] || '';
+        
+        // Title
+        const titleCell = row.insertCell();
+        const title = item.title || '';
+        titleCell.textContent = title.length > 50 ? title.substring(0, 50) + '...' : title;
+        titleCell.setAttribute('title', title);
+        
+        // Bullish Score
+        row.insertCell().textContent = item['bullish score'] || '';
+        
+        // URL
+        const urlCell = row.insertCell();
+        const url = item.url || '';
+        urlCell.innerHTML = url ? `<a href="${url}" target="_blank">View</a>` : '';
+        
+        // Surprise Level
+        const surpriseCell = row.insertCell();
+        const surpriseLevel = item['surprise level'] || '';
+        surpriseCell.innerHTML = `<span class="surprise-${surpriseLevel.toLowerCase()}">${surpriseLevel}</span>`;
+        
+        // Confidence
+        const confidenceCell = row.insertCell();
+        const confidence = item['confidence'] || '';
+        const confidenceNum = parseInt(confidence);
+        let confidenceClass = 'confidence-medium';
+        if (confidenceNum >= 4) confidenceClass = 'confidence-high';
+        else if (confidenceNum <= 2) confidenceClass = 'confidence-low';
+        confidenceCell.innerHTML = `<span class="${confidenceClass}">${confidence}</span>`;
+        
+        // Key Positive Factors
+        const factorsCell = row.insertCell();
+        const factors = item['positive factors'] || '';
+        factorsCell.textContent = factors.length > 40 ? factors.substring(0, 40) + '...' : factors;
+        factorsCell.setAttribute('title', factors);
+        
+        // Financial Highlights
+        const highlightsCell = row.insertCell();
+        const highlights = item['fiancial highlights'] || ''; // Note: typo in CSV header
+        highlightsCell.textContent = highlights.length > 40 ? highlights.substring(0, 40) + '...' : highlights;
+        highlightsCell.setAttribute('title', highlights);
+        
+        // Future Outlook
+        const outlookCell = row.insertCell();
+        const outlook = item['Future Outlook'] || '';
+        outlookCell.textContent = outlook.length > 40 ? outlook.substring(0, 40) + '...' : outlook;
+        outlookCell.setAttribute('title', outlook);
+        
+        // Market Impact
+        const impactCell = row.insertCell();
+        const impact = item['market impact'] || '';
+        impactCell.textContent = impact.length > 40 ? impact.substring(0, 40) + '...' : impact;
+        impactCell.setAttribute('title', impact);
+        
+        // Risk Factors
+        const riskCell = row.insertCell();
+        const risks = item['risk factors'] || '';
+        riskCell.textContent = risks.length > 40 ? risks.substring(0, 40) + '...' : risks;
+        riskCell.setAttribute('title', risks);
+        
+        // Market Expectation Comparison
+        const expectationCell = row.insertCell();
+        const expectation = item['Market Expectation Comparison'] || '';
+        expectationCell.textContent = expectation.length > 40 ? expectation.substring(0, 40) + '...' : expectation;
+        expectationCell.setAttribute('title', expectation);
+        
+        // Reasoning Summary
+        const reasoningCell = row.insertCell();
+        const reasoning = item['Reasoning Summary'] || '';
+        reasoningCell.textContent = reasoning.length > 40 ? reasoning.substring(0, 40) + '...' : reasoning;
+        reasoningCell.setAttribute('title', reasoning);
+        
+        // Current Price $
+        row.insertCell().textContent = item['current price $'] || '';
+        
+        // Market Cap
+        row.insertCell().textContent = item['market cap'] || '';
+        
+        // PE
+        row.insertCell().textContent = item['pe'] || '';
+        
+        // Volume Ratio
+        row.insertCell().textContent = item['volume ratio'] || '';
+        
+        // RSI_14
+        row.insertCell().textContent = item['rsi_14'] || '';
+        
+        // Price vs SMA30 %
+        const sma30Cell = row.insertCell();
+        sma30Cell.textContent = item['price vs sma30 pct'] || '';
+        sma30Cell.classList.add(parseFloat(item['price vs sma30 pct']) > 0 ? 'positive' : 'negative');
+        
+        // Vol Annual %
+        row.insertCell().textContent = item['vol annual pct'] || '';
+        
+        // Sector
+        row.insertCell().textContent = item['sector'] || '';
+        
+        // Industry
+        row.insertCell().textContent = item['industry'] || '';
+        
+        // Price to 52w High %
+        row.insertCell().textContent = item['price to 52w high pct'] || '';
+        
+        // Price to 52w Low %
+        row.insertCell().textContent = item['price to 52w low pct'] || '';
+        
+        // Beta
+        row.insertCell().textContent = item['beta'] || '';
+    });
+}
+        // Update the data table
+        function updateTable2() {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                const row = tableBody.insertRow();
+                const cell = row.insertCell();
+                cell.colSpan = 30;
+                cell.classList.add('loading');
+                cell.textContent = 'No data found.';
+                return;
+            }
+
+            filteredData.forEach((item, index) => {
+                const row = tableBody.insertRow();
+                row.classList.add('clickable-row');
+                row.setAttribute('data-index', index);
+                
+                // Add click event listener for detailed view
+                row.addEventListener('click', () => showDetailedAnalysis(item, row));
+                
+                // Date
+                row.insertCell().textContent = item.date;
+                
+                // Ticker
+                row.insertCell().textContent = item.ticker;
+                
+                // Short %
+                row.insertCell().textContent = item['short%'];
+                
+                // Predicted %
+                const predictedCell = row.insertCell();
+                predictedCell.textContent = item['Predicted daily % change'];
+                predictedCell.classList.add(parseFloat(item['Predicted daily % change']) > 0 ? 'positive' : 'negative');
+                
+                // Actual %
+                const actualCell = row.insertCell();
+                actualCell.textContent = item['Actual Daily % change'];
+                actualCell.classList.add(parseFloat(item['Actual Daily % change']) > 0 ? 'positive' : 'negative');
+
+                // Weekly %
+                row.insertCell().textContent = item['Actual Weekly % change'];
+                
+                // Title
+                const titleCell = row.insertCell();
+                const title = item.Title || '';
+                titleCell.textContent = title.length > 50 ? title.substring(0, 50) + '...' : title;
+                titleCell.setAttribute('title', title);
+                
+                // Bullish Score
+                row.insertCell().textContent = item['Bullish score'];
+                
+                // URL
+                const urlCell = row.insertCell();
+                const url = item.url || '';
+                urlCell.innerHTML = url ? `<a href="${url}" target="_blank">View</a>` : '';
+                
+                // Surprise Level
+                const surpriseCell = row.insertCell();
+                const surpriseLevel = item['surprise level'] || '';
+                surpriseCell.innerHTML = `<span class="surprise-${surpriseLevel.toLowerCase()}">${surpriseLevel}</span>`;
+                
+                // Confidence
+                const confidenceCell = row.insertCell();
+                const confidence = item['Confidence'] || item['prediction confidence'] || '';
+                const confidenceNum = parseInt(confidence);
+                let confidenceClass = 'confidence-medium';
+                if (confidenceNum >= 4) confidenceClass = 'confidence-high';
+                else if (confidenceNum <= 2) confidenceClass = 'confidence-low';
+                confidenceCell.innerHTML = `<span class="${confidenceClass}">${confidence}</span>`;
+                
+                // Key Positive Factors
+                const factorsCell = row.insertCell();
+                const factors = item['Key Positive Factors'] || '';
+                factorsCell.textContent = factors.length > 40 ? factors.substring(0, 40) + '...' : factors;
+                factorsCell.setAttribute('title', factors);
+                
+                // Financial Highlights
+                const highlightsCell = row.insertCell();
+                const highlights = item['Financial Highlights'] || '';
+                highlightsCell.textContent = highlights.length > 40 ? highlights.substring(0, 40) + '...' : highlights;
+                highlightsCell.setAttribute('title', highlights);
+                
+                // Future Outlook
+                const outlookCell = row.insertCell();
+                const outlook = item['Future Outlook'] || '';
+                outlookCell.textContent = outlook.length > 40 ? outlook.substring(0, 40) + '...' : outlook;
+                outlookCell.setAttribute('title', outlook);
+                
+                // Market Impact
+                const impactCell = row.insertCell();
+                const impact = item['Market Impact'] || '';
+                impactCell.textContent = impact.length > 40 ? impact.substring(0, 40) + '...' : impact;
+                impactCell.setAttribute('title', impact);
+                
+                // Risk Factors
+                const riskCell = row.insertCell();
+                const risks = item['Risk Factors'] || '';
+                riskCell.textContent = risks.length > 40 ? risks.substring(0, 40) + '...' : risks;
+                riskCell.setAttribute('title', risks);
+                
+                // Market Expectation Comparison
+                const expectationCell = row.insertCell();
+                const expectation = item['Market Expectation Comparison'] || '';
+                expectationCell.textContent = expectation.length > 40 ? expectation.substring(0, 40) + '...' : expectation;
+                expectationCell.setAttribute('title', expectation);
+                
+                // Reasoning Summary
+                const reasoningCell = row.insertCell();
+                const reasoning = item['Reasoning Summary'] || '';
+                reasoningCell.textContent = reasoning.length > 40 ? reasoning.substring(0, 40) + '...' : reasoning;
+                reasoningCell.setAttribute('title', reasoning);
+                
+                // Current Price $
+                row.insertCell().textContent = item['Current Price $'];
+                
+                // Market Cap
+                row.insertCell().textContent = item['Market Cap'];
+                
+                // PE
+                row.insertCell().textContent = item['PE'];
+                
+                // Volume Ratio
+                row.insertCell().textContent = item['Volume Ratio'];
+                
+                // RSI_14
+                row.insertCell().textContent = item['RSI_14'];
+                
+                // Price vs SMA30 %
+                const sma30Cell = row.insertCell();
+                sma30Cell.textContent = item['price vs sma30 pct'];
+                sma30Cell.classList.add(parseFloat(item['price vs sma30 pct']) > 0 ? 'positive' : 'negative');
+                
+                // Vol Annual %
+                row.insertCell().textContent = item['vol annual pct'];
+                
+                // Sector
+                row.insertCell().textContent = item['sector'];
+                
+                // Industry
+                row.insertCell().textContent = item['industry'];
+                
+                // Price to 52w High %
+                row.insertCell().textContent = item['price to 52w high pct'];
+                
+                // Price to 52w Low %
+                row.insertCell().textContent = item['price to 52w LOW pct'];
+                
+                // Beta
+                row.insertCell().textContent = item['beta'];
+            });
+        }
+
+        // Show detailed analysis for selected stock
+        function showDetailedAnalysis(item, row) {
+            // Remove previous selection
+            document.querySelectorAll('.selected-row').forEach(r => r.classList.remove('selected-row'));
+            row.classList.add('selected-row');
+            
+            // Show detailed analysis section
+            const detailedSection = document.getElementById('detailedAnalysis');
+            detailedSection.style.display = 'block';
+            
+            // Update content
+            document.getElementById('analysisTitle').textContent = `${item.ticker} - ${item.Title}`;
+            document.getElementById('futureOutlook').textContent = item['Future Outlook'] || 'No data available';
+            document.getElementById('marketExpectations').textContent = item['Market Expectation Comparison'] || 'No data available';
+            document.getElementById('reasoningSummary').textContent = item['Reasoning Summary'] || 'No data available';
+            
+            // Scroll to detailed view
+            detailedSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Initial call to set up the dashboard
+        document.addEventListener('DOMContentLoaded', fetchData);
+    </script>
+</body>
+</html>
