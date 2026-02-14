@@ -14,7 +14,8 @@ import yfinance as yf
 import pandas as pd
 
 # ASX announcement URL
-ASX_URL = "https://www.asx.com.au/asx/v2/statistics/todayAnns.do"
+#ASX_URL = "https://www.asx.com.au/asx/v2/statistics/todayAnns.do"
+ASX_URL = "https://www.asx.com.au/asx/v2/statistics/prevBusDayAnns.do"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # Your ticker list (unchanged)
@@ -327,7 +328,8 @@ def passes_advanced_filters(ticker):
 
 def first_scrape():
     """Get all announcement data including titles for PDF URL matching"""
-    my_url = "https://www.asx.com.au/asx/v2/statistics/todayAnns.do"
+    #my_url = "https://www.asx.com.au/asx/v2/statistics/todayAnns.do"
+    my_url = "https://www.asx.com.au/asx/v2/statistics/prevBusDayAnns.do"
     req = requests.get(my_url, headers=HEADERS_PDF)
     if req.status_code != 200:
         print(f"Failed to load page, status code {req.status_code}")
