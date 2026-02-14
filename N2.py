@@ -600,7 +600,8 @@ announcements.sort(key=lambda x: x["sentiment_score"], reverse=True)
 pdf_urls = get_pdf_urls_for_announcements(announcements)
 short_interest_data = get_short_interest_for_announcements(announcements)
 
-today_str = datetime.now(pytz.timezone("Australia/Sydney")).strftime("%Y%m%d")
+#today_str = datetime.now(pytz.timezone("Australia/Sydney")).strftime("%Y%m%d")
+today_str = datetime(2026, 2, 13).date()
 csv_filename = f"bullish_announcements_{today_str}.csv"
 
 with open(csv_filename, "w", newline="", encoding="utf-8") as f:
