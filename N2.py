@@ -9,9 +9,11 @@ import matplotlib.pyplot as plt
 import re
 from textwrap import wrap
 import pathlib
+
 # ASX announcement URL
 ASX_URL = "https://www.asx.com.au/asx/v2/statistics/todayAnns.do"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
+
 # PLACEHOLDER: Your ticker list (add your actual tickers here)
 TICKER_LIST = {
     "ICN.AX", "RRL.AX", "GGAB.AX", "IFRA.AX", "HDN.AX", "IBAL.AX", "MVE.AX", "IBUY.AX", "AESG.AX", "GHHF.AX", "ALD.AX",
@@ -34,7 +36,7 @@ TICKER_LIST = {
     "FPR.AX", "IKO.AX", "DBBF.AX", "SCG.AX", "AIA.AX", "BGA.AX", "BMN.AX", "MVB.AX", "ASX.AX", "EMKT.AX",
     "CIP.AX", "TYR.AX", "CNEW.AX", "DGGF.AX", "C79.AX", "ASB.AX", "QOZ.AX", "WC8.AX", "DFGH.AX", "EDV.AX",
     "GPT.AX", "GDG.AX", "DOW.AX", "AGL.AX", "BPT.AX", "GWA.AX", "SIG.AX",
-"GIVE.AX", "ASK.AX", "ESPO.AX", "HBRD.AX", "QFN.AX", "MTAV.AX", "EX20.AX", "AD8.AX", "AAA.AX", "ADEF.AX", "GLIN.AX", "DVDY.AX", "GRNV.AX",
+    "GIVE.AX", "ASK.AX", "ESPO.AX", "HBRD.AX", "QFN.AX", "MTAV.AX", "EX20.AX", "AD8.AX", "AAA.AX", "ADEF.AX", "GLIN.AX", "DVDY.AX", "GRNV.AX",
     "MAQ.AX", "MND.AX", "SKUK.AX", "VBTC.AX", "LPGD.AX", "RSM.AX", "BBAB.AX", "HQLT.AX", "QHSM.AX", "IIND.AX",
     "VSL.AX", "BHYB.AX", "BGBL.AX", "VBLD.AX", "PRU.AX", "MVW.AX", "ILB.AX", "AYLD.AX", "OOO.AX", "DVP.AX",
     "PAXX.AX", "GOZ.AX", "BWP.AX", "INES.AX", "NDIA.AX", "PLUS.AX", "PMGOLD.AX", "PPC.AX", "QOR.AX", "WGX.AX",
@@ -84,149 +86,166 @@ TICKER_LIST = {
     "PPM.AX", "IESG.AX", "OML.AX", "AEF.AX", "TANN.AX", "FEMX.AX", "SLF.AX", "BTXX.AX", "CLNE.AX", "SLC.AX",
     "SHL.AX", "KGN.AX", "HQUS.AX", "GXAI.AX", "HNDQ.AX", "QSML.AX", "VDCO.AX", "BBOZ.AX", "IHOO.AX", "HVLU.AX",
     "APX.AX", "PWH.AX", "ELD.AX", "HLS.AX", "DTEC.AX"
-    # Add your full ticker list here - example format: "TICKER.AX"
 }
-# PLACEHOLDER: Bullish and bearish keywords (add your actual keywords here)
+
+# Biotech/Healthcare tickers to EXCLUDE (too volatile)
+BIOTECH_EXCLUDE = {
+    "IMU.AX", "PYC.AX", "NEU.AX", "CSL.AX", "RMD.AX", "COH.AX", "SHL.AX", 
+    "RHC.AX", "CPU.AX", "DRR.AX", "BOT.AX", "CURE.AX", "DRUG.AX", "HLTH.AX"
+    # Add more biotech/pharma tickers as needed
+}
+
+# Enhanced keywords focusing on UNEXPECTED POSITIVE results
+SURPRISE_KEYWORDS = {
+    # Extreme surprises (very high weight)
+    "exceeds expectations": 4.0,
+    "above expectations": 4.0,
+    "beats expectations": 4.0,
+    "significantly exceeds": 4.5,
+    "well above": 4.0,
+    "significantly above": 4.0,
+    "surprise profit": 4.0,
+    "unexpected profit": 4.0,
+    
+    # Takeover/M&A (high weight - concrete events)
+    "takeover offer": 5.0,
+    "acquisition offer": 5.0,
+    "acquisition proposal": 4.5,
+    "scheme of arrangement": 4.5,
+    "takeover bid": 5.0,
+    "buyout offer": 5.0,
+    
+    # Major contract wins (concrete business wins)
+    "major contract": 3.5,
+    "significant contract": 3.5,
+    "contract awarded": 3.5,
+    "wins contract": 3.5,
+    "secures contract": 3.5,
+    
+    # Guidance upgrades (concrete improvement)
+    "raises guidance": 4.0,
+    "upgrades guidance": 4.0,
+    "increased guidance": 4.0,
+    "guidance upgrade": 4.0,
+    "guidance raised": 4.0,
+    
+    # Strong financial beats
+    "record profit": 3.5,
+    "record earnings": 3.5,
+    "record ebitda": 3.5,
+    "record revenue": 3.2,
+    "profit surge": 3.5,
+    "earnings surge": 3.5,
+    
+    # Major discoveries (especially mining)
+    "significant discovery": 3.8,
+    "major discovery": 3.8,
+    "high-grade": 3.5,
+    "exceptional results": 3.5,
+    "outstanding results": 3.5,
+    
+    # Production/operational surprises
+    "production exceeds": 3.5,
+    "output exceeds": 3.5,
+    "ahead of schedule": 3.0,
+    "early production": 3.0,
+}
+
+# Regular bullish keywords (moderate weight)
 BULLISH_KEYWORDS = {
-# M&A / Takeover
-    "takeover": 3.0,
-    "acquisition offer": 3.0,
-    "acquisition proposal": 3.0,
-    "non-binding proposal": 3.0,
-    "strategic review": 2.8,
-    "approach received": 3.0,
-    "indicative proposal": 3.0,
-    "preliminary discussions": 2.8,
-    "scheme of arrangement": 3.0,
-    "friendly merger": 2.7,
-    "buyout": 3.0,
-    "merger": 2.5,
-    "strategic acquisition": 2.5,
-    # Financial Performance
-    "record": 2.5,
-    "record result": 2.7,
-    "record profit": 2.7,
-    "profit": 2.0,
-    "earnings": 2.0,
-    "eps growth": 2.3,
-    "ebitda": 1.8,
-    "revenue": 2.0,
-    "sales": 2.0,
-    "turnover": 2.0,
-    "cash flow": 2.0,
-    "operating cash flow": 2.0,
-    "free cash flow": 2.0,
-    "exceeds": 2.5,
-    "beats": 2.5,
-    "beat": 2.5,
-    "above expectations": 2.5,
+    # Financial
+    "profit": 1.5,
+    "earnings": 1.5,
+    "revenue growth": 2.0,
+    "strong revenue": 2.0,
+    "cash flow": 1.8,
     "margin expansion": 2.0,
-    "net income": 2.0,
-    "strong quarter": 2.0,
-    "profitability": 2.0,
-    "strong performance": 2.2,
-    "solid performance": 2.0,
-    "better than expected": 2.5,
-    # Guidance & Forecasts
-    "raises guidance": 2.8,
-    "increased guidance": 2.8,
-    "guidance beat": 2.8,
-    "strong guidance": 2.7,
-    "positive outlook": 2.7,
-    "upgrade": 2.5,
-    "upward revision": 2.5,
-    "forecast": 1.8,
-    "projected growth": 2.2,
-    "analyst upgrade": 2.5,
-    "guidance maintained": 1.8,  # stable, not negative
-    "long-term outlook": 2.0,
-    "expectations exceeded": 2.5,
-    # Biotech / Regulatory Milestones
-    "approval": 2.5,
-    "regulatory approval": 3.0,
-    "fda approval": 3.0,
-    "clearance": 2.5,
-    "dose escalation": 3.0,
-    "trial commencement": 3.0,
-    "patient enrollment": 2.8,
-    "phase 3": 3.0,
-    "phase iii": 3.0,
-    "phase 2": 2.8,
-    "phase ii": 2.8,
-    "positive trial results": 3.0,
-    "study met primary endpoint": 3.0,
-    "primary endpoint achieved": 3.0,
-    "secondary endpoint achieved": 2.7,
-    "patent granted": 2.5,
-    "orphan drug designation": 3.0,
-    "breakthrough therapy designation": 3.0,
-    "fast track approval": 3.0,
-    # Strategic Moves & Growth
-    "new contract": 2.3,
-    "contract win": 2.3,
-    "strategic partnership": 2.2,
-    "market expansion": 2.3,
-    "global expansion": 2.3,
-    "new market entry": 2.3,
-    "licensing agreement": 2.2,
-    "production increase": 2.3,
-    "new facility": 2.3,
-    "funding secured": 2.5,
-    "syndicated loan": 2.0,
-    "secured financing": 2.3,
-    "project finance approved": 2.3,
-    "joint venture": 2.2,
-    "alliance": 2.0,
-    "distribution agreement": 2.2,
-    "supply agreement": 2.2,
-    # Shareholder Returns
-    "dividend increase": 2.8,
+    
+    # Operational
+    "new contract": 2.0,
+    "contract win": 2.0,
+    "production increase": 2.0,
+    "capacity expansion": 2.0,
+    
+    # Strategic
+    "strategic partnership": 2.0,
+    "market expansion": 2.0,
+    "new market": 2.0,
+    
+    # Shareholder returns
+    "dividend increase": 2.5,
     "special dividend": 2.8,
-    "share repurchase": 2.7,
-    "buyback": 2.7,
-    "capital return": 2.5,
-    "increased payout": 2.7,
-    "stock split": 2.5,
-    "bonus issue": 2.5,
-    # Market Sentiment / Momentum
-    "strong demand": 2.3,
-    "accelerated growth": 2.3,
-    "market leader": 2.0,
-    "uptrend": 1.8,
-    "robust": 1.8,
-    "surge": 2.0,
-    "momentum": 1.8,
-    "traction": 1.8,
-    "strengthening": 1.8,
-    # Industry / Company Milestones
-    "record high": 2.7,
-    "milestone": 2.5,
-    "breakthrough": 2.5,
-    "new product": 2.3,
-    "product launch": 2.3,
-    "innovation": 1.8,
-    "technology breakthrough": 2.5,
-    "market share gain": 2.3,
-    "capacity expansion": 2.3,
-    "operational milestone": 2.2,
-    # Add your full bullish keywords here with appropriate weights
+    "share buyback": 2.5,
 }
+
+# Exclude routine/expected announcements (these won't surprise anyone)
+ROUTINE_ANNOUNCEMENTS = {
+    "trading halt",
+    "voluntary suspension",
+    "appendix 4e",
+    "appendix 3b",
+    "change of director",
+    "change in director",
+    "cleansing notice",
+    "change of registered",
+    "notification of cessation",
+    "becomes substantial",
+    "ceases to be substantial",
+    "daily fund update",
+    "net tangible asset",
+    "nta",
+    "initial director's interest",
+    "change of director's interest",
+    "weekly investor update",
+    "monthly investor update",
+}
+
+# Biotech-specific phrases to filter out
+BIOTECH_KEYWORDS = {
+    "clinical trial",
+    "phase 1",
+    "phase 2", 
+    "phase 3",
+    "phase i",
+    "phase ii",
+    "phase iii",
+    "patient enrollment",
+    "dose escalation",
+    "trial results",
+    "fda",
+    "tga",
+    "regulatory",
+    "drug",
+    "therapy",
+    "treatment",
+}
+
 BEARISH_KEYWORDS = {
-    "decline": -1.5,
-    "loss": -2.0,
-    "downgrade": -1.5,
-    "miss": -2.0,
-    "weak": -1.5,
-    "drop": -1.5,
-    "fall": -1.5,
-    "decrease": -1.5,
-    # Add your full bearish keywords here
+    "decline": -2.0,
+    "loss": -2.5,
+    "downgrade": -2.0,
+    "miss": -2.5,
+    "misses": -2.5,
+    "below expectations": -3.0,
+    "disappointing": -2.5,
+    "weak": -2.0,
+    "drop": -2.0,
+    "fall": -2.0,
+    "decrease": -2.0,
+    "impairment": -2.5,
+    "write-down": -2.5,
+    "guidance downgrade": -3.0,
+    "lowers guidance": -3.0,
+    "suspends": -2.5,
 }
+
 NEGATION_WORDS = {"not", "no", "never", "none"}
+
 # PDF URL scraping functions
 HEADERS_PDF = {
     'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0'
 }
+
 def first_scrape():
     """Get all announcement data including titles for PDF URL matching"""
     my_url = "https://www.asx.com.au/asx/v2/statistics/todayAnns.do"
@@ -234,35 +253,35 @@ def first_scrape():
     if req.status_code != 200:
         print(f"Failed to load page, status code {req.status_code}")
         return []
-    
+
     page_soup = BeautifulSoup(req.content, 'html.parser')
     link_form = "/asx/v2/statistics/displayAnnouncement.do?display=pdf&idsId="
     announcement_data = []
-    
+
     table = page_soup.find("table")
     if not table:
         return []
-    
+
     for tr in table.find_all('tr')[1:]:  # Skip header
         tds = tr.find_all('td')
         if len(tds) < 4:
             continue
-            
+
         ticker = tds[0].text.strip().upper()
-        
+
         # Extract title for matching
         title_cell = tds[3]
         full_title_text = title_cell.get_text(separator=" ", strip=True)
         title = re.sub(r'\d+\s+pages?\s+\d+\.?\d*KB$', '', full_title_text).strip()
-        
+
         # Get PDF link
         a_tag = tds[3].find('a', href=True)
         if not a_tag:
             continue
-            
+
         href_raw = a_tag['href']
         href_clean = href_raw.replace('\n', '').replace('\r', '').replace(' ', '')
-        
+
         if link_form in href_clean:
             full_url = 'https://www.asx.com.au' + href_clean
             announcement_data.append({
@@ -270,7 +289,7 @@ def first_scrape():
                 'title': title,
                 'landing_url': full_url
             })
-    
+
     return announcement_data
 
 def get_pdf_url_from_landing_page(landing_url):
@@ -279,8 +298,7 @@ def get_pdf_url_from_landing_page(landing_url):
         response = requests.get(landing_url, headers=HEADERS_PDF)
         if response.status_code != 200:
             return None
-            
-        # Look for PDF URL in the response
+
         content = response.text
         pdf_match = re.search(r'/asxpdf/[^"\']*\.pdf', content)
         if pdf_match:
@@ -293,25 +311,20 @@ def get_pdf_url_from_landing_page(landing_url):
 def get_pdf_urls_for_announcements(announcements):
     """Get PDF URLs that match specific announcements"""
     print("\n--- Getting PDF URLs for announcements ---")
-    
-    # Get all announcement data from ASX
     all_announcement_data = first_scrape()
-    
     pdf_urls = {}
-    
+
     for ann in announcements:
         ticker = ann["ticker"]
         title = ann["title"]
-        
-        # Find matching announcement data
+
         matching_data = None
         for data in all_announcement_data:
             if (data['ticker'] == ticker and 
-                # Use fuzzy matching for titles since they might be slightly different
                 similar_titles(data['title'], title)):
                 matching_data = data
                 break
-        
+
         if matching_data:
             print(f"Getting PDF URL for {ticker}: {title[:50]}...")
             pdf_url = get_pdf_url_from_landing_page(matching_data['landing_url'])
@@ -322,23 +335,22 @@ def get_pdf_urls_for_announcements(announcements):
                 print(f"  No PDF URL found")
         else:
             print(f"No matching announcement found for {ticker}: {title[:50]}...")
-    
+
     return pdf_urls
 
 def similar_titles(title1, title2, threshold=0.8):
-    """Check if two titles are similar enough (simple word-based comparison)"""
+    """Check if two titles are similar enough"""
     words1 = set(title1.lower().split())
     words2 = set(title2.lower().split())
-    
+
     if not words1 or not words2:
         return False
-    
+
     intersection = len(words1.intersection(words2))
     union = len(words1.union(words2))
-    
+
     return intersection / union >= threshold
 
-# Sentiment analysis functions
 def parse_announcement_datetime(date_time_str):
     formats_to_try = [
         "%d/%m/%Y %I:%M %p",
@@ -346,7 +358,7 @@ def parse_announcement_datetime(date_time_str):
         "%d/%m/%Y\n%I:%M %p",
         "%d/%m/%Y\n%H:%M",
     ]
-    
+
     for fmt in formats_to_try:
         try:
             dt = datetime.strptime(date_time_str, fmt)
@@ -355,92 +367,108 @@ def parse_announcement_datetime(date_time_str):
             continue
     return None
 
+def is_routine_announcement(title):
+    """Check if announcement is routine/expected"""
+    title_lower = title.lower()
+    return any(phrase in title_lower for phrase in ROUTINE_ANNOUNCEMENTS)
+
+def is_biotech_related(title):
+    """Check if announcement contains biotech-related keywords"""
+    title_lower = title.lower()
+    return any(keyword in title_lower for keyword in BIOTECH_KEYWORDS)
+
 def calculate_sentiment_score(title):
+    """Enhanced sentiment calculation focusing on surprise factor"""
     title_lower = title.lower()
     score = 0.0
-    
-    # Check for phrase matches first
+
+    # Check SURPRISE keywords first (highest priority)
+    for phrase, weight in SURPRISE_KEYWORDS.items():
+        if phrase in title_lower:
+            score += weight
+            print(f"  SURPRISE match: '{phrase}' (+{weight})")
+
+    # Check regular bullish keywords
     for phrase, weight in BULLISH_KEYWORDS.items():
         if phrase in title_lower:
             score += weight
-    
-    # Check individual words with negation handling
+
+    # Check bearish keywords
+    for phrase, weight in BEARISH_KEYWORDS.items():
+        if phrase in title_lower:
+            score += weight
+
+    # Word-level analysis with negation
     words = re.findall(r'\b\w+\b', title_lower)
     for i, word in enumerate(words):
         is_negated = i > 0 and words[i-1] in NEGATION_WORDS
-        
-        if word in BULLISH_KEYWORDS and BULLISH_KEYWORDS[word] <= 2.0:
-            score += BULLISH_KEYWORDS[word] * (-0.5 if is_negated else 1.0)
-        elif word in BEARISH_KEYWORDS:
-            score += BEARISH_KEYWORDS[word] * (-0.5 if is_negated else 1.0)
-    
-    return round(score, 2)
-    
 
-# Short interest scraping functions
+        # Only check single words, not phrases
+        if word in BULLISH_KEYWORDS and len(word.split()) == 1:
+            word_score = BULLISH_KEYWORDS[word]
+            if is_negated:
+                score -= word_score * 0.5
+        elif word in BEARISH_KEYWORDS and len(word.split()) == 1:
+            word_score = BEARISH_KEYWORDS[word]
+            if is_negated:
+                score -= word_score * 0.5
+            else:
+                score += word_score
+
+    return round(score, 2)
+
 def get_short_interest(ticker):
-    """Get current short interest percentage for a ticker from shortman.com.au"""
-    # Remove .AX suffix for the URL
+    """Get current short interest percentage for a ticker"""
     clean_ticker = ticker.replace('.AX', '')
     url = f"https://www.shortman.com.au/stock?q={clean_ticker}"
-    
+
     try:
         response = requests.get(url, headers=HEADERS)
         if response.status_code != 200:
-            print(f"Failed to get short data for {ticker}, status: {response.status_code}")
             return "N/A"
-        
+
         soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Find the td element with class "ca" containing the short percentage
         short_td = soup.find('td', class_='ca')
         if short_td:
             short_text = short_td.get_text(strip=True)
-            # Clean up the percentage value
             short_percentage = short_text.replace('%', '').strip()
             return f"{short_percentage}%"
         else:
             return "N/A"
-            
+
     except Exception as e:
         print(f"Error getting short data for {ticker}: {e}")
         return "N/A"
 
-def get_short_interest_for_announcements(announcements, no_match_tickers=None):
-    """Get short interest data for all announcement tickers and no-match tickers"""
+def get_short_interest_for_announcements(announcements):
+    """Get short interest data for announcement tickers"""
     print("\n--- Getting short interest data ---")
     short_data = {}
-    
-    # Get unique tickers from announcements
+
     unique_tickers = set()
     for ann in announcements:
         unique_tickers.add(ann["ticker"] + ".AX")
-    
-    # Add no-match tickers if provided
-    if no_match_tickers:
-        unique_tickers.update(no_match_tickers)
-    
+
     for ticker in unique_tickers:
         print(f"Getting short interest for {ticker}...")
         short_interest = get_short_interest(ticker)
         short_data[ticker] = short_interest
         print(f"  {ticker}: {short_interest}")
-        
-        # Add a small delay to be respectful to the server
-        import time
         time.sleep(0.5)
-    
+
     return short_data
 
 # Main execution
-print(f"Fetching from URL: {ASX_URL}")
+print("=" * 80)
+print("ASX SENTIMENT ANALYZER - FILTERING FOR UNEXPECTED POSITIVE RESULTS")
+print("=" * 80)
+print(f"\nFetching from URL: {ASX_URL}")
 response = requests.get(ASX_URL, headers=HEADERS)
 print(f"Response status code: {response.status_code}")
 
 soup = BeautifulSoup(response.text, "html.parser")
 table = soup.find("table")
 
-processed_tickers = set()
 announcements = []
 
 if table:
@@ -448,18 +476,24 @@ if table:
         tds = tr.find_all("td")
         if len(tds) < 4:
             continue
-        
+
         ticker = tds[0].text.strip()
         full_ticker = ticker + ".AX"
-        
+
+        # Filter 1: Must be in ticker list
         if full_ticker not in TICKER_LIST:
             continue
-        
-        # Check for price-sensitive asterisk image
+
+        # Filter 2: Exclude biotech stocks
+        if full_ticker in BIOTECH_EXCLUDE:
+            print(f"Excluding biotech: {full_ticker}")
+            continue
+
+        # Filter 3: Must be price-sensitive
         if not tds[2].find("img", alt="asterix"):
             continue
-        
-        # Extract date/time string
+
+        # Extract date/time
         date_cell = tds[1]
         date_lines = [line.strip() for line in date_cell.stripped_strings]
         if len(date_lines) >= 2:
@@ -468,135 +502,130 @@ if table:
             date_time_str = date_lines[0]
         else:
             date_time_str = ""
-        
+
         date_time = parse_announcement_datetime(date_time_str)
-        
+
         # Extract and clean title
         title_cell = tds[3]
         full_title_text = title_cell.get_text(separator=" ", strip=True)
         title = re.sub(r'\d+\s+pages?\s+\d+\.?\d*KB$', '', full_title_text).strip()
-        
+
+        # Filter 4: Exclude routine announcements
+        if is_routine_announcement(title):
+            print(f"Excluding routine: {ticker} - {title[:50]}")
+            continue
+
+        # Filter 5: Exclude biotech-related content
+        if is_biotech_related(title):
+            print(f"Excluding biotech content: {ticker} - {title[:50]}")
+            continue
+
+        # Calculate sentiment
+        print(f"\nAnalyzing: {ticker} - {title}")
         score = calculate_sentiment_score(title)
-        
+        print(f"  Final score: {score}")
+
+        # Filter 6: Only include positive sentiment
+        if score <= 0:
+            print(f"  Excluding: non-positive sentiment")
+            continue
+
         announcements.append({
             "ticker": ticker,
             "title": title,
             "date_time": date_time,
             "sentiment_score": score
         })
-        
-        processed_tickers.add(full_ticker)
 
 else:
     print("No announcements table found.")
 
-no_match_tickers = TICKER_LIST - processed_tickers
+# Sort by sentiment score and take TOP 5 ONLY
 announcements.sort(key=lambda x: x["sentiment_score"], reverse=True)
+top_announcements = announcements[:5]  # LIMIT TO 5
 
-# Get PDF URLs for specific announcements (not all tickers)
-pdf_urls = get_pdf_urls_for_announcements(announcements)
+print("\n" + "=" * 80)
+print(f"FOUND {len(announcements)} POSITIVE ANNOUNCEMENTS")
+print(f"OUTPUTTING TOP {len(top_announcements)} TO CSV")
+print("=" * 80)
 
-# Get short interest data for announcements and no-match tickers
-short_interest_data = get_short_interest_for_announcements(announcements)
+for i, ann in enumerate(top_announcements, 1):
+    print(f"{i}. {ann['ticker']}: {ann['title']} (Score: {ann['sentiment_score']})")
 
-# CSV writing section
+# Get PDF URLs and short interest for top 5 only
+if top_announcements:
+    pdf_urls = get_pdf_urls_for_announcements(top_announcements)
+    short_interest_data = get_short_interest_for_announcements(top_announcements)
+else:
+    pdf_urls = {}
+    short_interest_data = {}
+
+# CSV writing section - TOP 5 ONLY
 today_str = datetime.now(pytz.timezone("Australia/Sydney")).strftime("%Y%m%d")
-csv_filename = f"bullish_announcements_{today_str}.csv"
+csv_filename = f"top5_unexpected_positive_{today_str}.csv"
 
 with open(csv_filename, "w", newline="", encoding="utf-8") as f:
-    fieldnames = ["date_time", "ticker", "pdf_url", "short_interest", "ChangePct", "title", "sentiment_score"]
+    fieldnames = ["rank", "date_time", "ticker", "pdf_url", "short_interest", "ChangePct", "title", "sentiment_score"]
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
-    
-    # Write announcements with their specific PDF URLs
-    for idx, ann in enumerate(announcements, start=2):
+
+    for idx, ann in enumerate(top_announcements, start=1):
         ticker = ann["ticker"]
         title = ann["title"]
         full_ticker = ticker + ".AX"
         short_interest = short_interest_data.get(full_ticker, "N/A")
-        # Get the specific PDF URL for this announcement
+        
         pdf_key = f"{ticker}_{title}"
         pdf_url = pdf_urls.get(pdf_key, "No PDF URL found")
-        
-        formula = f'=GOOGLEFINANCE("ASX:" & A{idx}, "changepct")'
-        
+
+        formula = f'=GOOGLEFINANCE("ASX:" & C{idx+1}, "changepct")'
+
         writer.writerow({
+            "rank": idx,
             "date_time": ann["date_time"].strftime("%d/%m/%Y %H:%M") if ann["date_time"] else "N/A",
             "ticker": ticker,
             "pdf_url": pdf_url,
-            "short_interest": short_interest,  # Add this line
+            "short_interest": short_interest,
             "ChangePct": formula,
             "title": title,
             "sentiment_score": ann["sentiment_score"]
-            
-            
         })
-    
-    # Section for tickers with no matching announcements
-    if no_match_tickers:
-        writer.writerow({
-            "date_time": "",
-            "ticker": "",
-            "pdf_url": "",
-            "short_interest": "",  # Add this line
-            "ChangePct": "",
-            "title": "No Matching Announcements",
-            
-            "sentiment_score": ""
-            
-            
-        })
-        
-        for ticker in sorted(no_match_tickers):
-            writer.writerow({
-                "date_time": "",
-                "ticker": ticker,
-                "pdf_url": "No PDF URL found",
-                "short_interest": short_interest,  # Add this line
-                "ChangePct": "",
-                "title": "No price-sensitive announcements",
-                
-                "sentiment_score": 0
-                
-                
-            })
 
-print(f"Saved CSV file: {csv_filename}")
+print(f"\n✓ Saved CSV file: {csv_filename}")
 
-# Generate chart if announcements found
-if announcements:
-    top = announcements[:7]
-    labels = [f"{a['ticker']} ({a['sentiment_score']}): {a['title']}" for a in top]
-    scores = [a["sentiment_score"] for a in top]
-    date_times = [f"{a['date_time'].strftime('%H:%M') if a['date_time'] else ''}" for a in top]
-    
-    plt.figure(figsize=(16, 12))
-    bars = plt.barh(labels, scores, color=[('green' if s > 0 else 'red') for s in scores])
+# Generate chart for top 5
+if top_announcements:
+    labels = [f"{a['ticker']} ({a['sentiment_score']}): {a['title']}" for a in top_announcements]
+    scores = [a["sentiment_score"] for a in top_announcements]
+    date_times = [f"{a['date_time'].strftime('%H:%M') if a['date_time'] else ''}" for a in top_announcements]
+
+    plt.figure(figsize=(16, 10))
+    bars = plt.barh(labels, scores, color='green')
     plt.gca().invert_yaxis()
-    plt.xlabel("Sentiment Score")
-    plt.title(f"Top 7 ASX Announcements by Sentiment Score - {datetime.now(pytz.timezone('Australia/Sydney')).strftime('%d/%m/%Y')}")
-    
+    plt.xlabel("Sentiment Score", fontsize=12, fontweight='bold')
+    plt.title(f"Top 5 Unexpected Positive ASX Announcements - {datetime.now(pytz.timezone('Australia/Sydney')).strftime('%d/%m/%Y')}", 
+              fontsize=14, fontweight='bold')
+
     # Wrap long labels
     for i, label in enumerate(plt.gca().get_yticklabels()):
-        wrapped_label = "\n".join(wrap(label.get_text(), 60))
+        wrapped_label = "\n".join(wrap(label.get_text(), 70))
         label.set_text(wrapped_label)
-    
-    plt.gca().set_yticklabels(plt.gca().get_yticklabels(), fontsize=8, ha='right')
-    
+
+    plt.gca().set_yticklabels(plt.gca().get_yticklabels(), fontsize=9, ha='right')
+
     # Add time annotations
     for bar, date_time_str in zip(bars, date_times):
         plt.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2,
-                 date_time_str.strip(), va='center', fontsize=8, weight='bold')
-    
+                 date_time_str.strip(), va='center', fontsize=9, weight='bold')
+
     plt.tight_layout()
-    png_filename = f"sentiment_chart_{today_str}.png"
+    png_filename = f"top5_unexpected_positive_{today_str}.png"
     plt.savefig(png_filename, bbox_inches='tight', dpi=300)
     plt.close()
-    print(f"Saved chart file: {png_filename}")
+    print(f"✓ Saved chart file: {png_filename}")
 else:
-    print("No announcements found.")
+    print("\nNo qualifying announcements found.")
 
-if no_match_tickers:
-    print("Tickers with no matching announcements:")
-    for ticker in sorted(no_match_tickers):
-        print(f"  {ticker}")
+print("\n" + "=" * 80)
+print("ANALYSIS COMPLETE")
+print("=" * 80)
