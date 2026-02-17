@@ -562,7 +562,7 @@ else:
 
 # CSV writing section - TOP 5 ONLY
 today_str = datetime.now(pytz.timezone("Australia/Sydney")).strftime("%Y%m%d")
-csv_filename = f"top5_unexpected_positive_{today_str}.csv"
+csv_filename = f"bullish_announcements_{today_str}.csv"
 
 with open(csv_filename, "w", newline="", encoding="utf-8") as f:
     fieldnames = ["rank", "date_time", "ticker", "pdf_url", "short_interest", "ChangePct", "title", "sentiment_score"]
@@ -619,7 +619,7 @@ if top_announcements:
                  date_time_str.strip(), va='center', fontsize=9, weight='bold')
 
     plt.tight_layout()
-    png_filename = f"top5_unexpected_positive_{today_str}.png"
+    png_filename = f"sentiment_chart_{today_str}.png"
     plt.savefig(png_filename, bbox_inches='tight', dpi=300)
     plt.close()
     print(f"✓ Saved chart file: {png_filename}")
