@@ -1,9 +1,11 @@
 from dotenv import load_dotenv
 import os
+import sys
 import requests
 import google.generativeai as genai
 import pandas as pd
 from datetime import datetime, timedelta
+import pytz
 import threading
 import io
 import logging
@@ -403,7 +405,7 @@ class EnhancedGeminiAnalyzer:
             app.logger.info("Started one-time automatic enhanced analysis thread")
 
     def find_latest_csv(self, base_url="https://spage.site/asx/"):
-        today = datetime.today().date()
+        today = datetime.now(pytz.timezone("Australia/Sydney")).date()
         self.announcement_date = today
         date_str = today.strftime("%Y%m%d")
         filename = f"bullish_announcements_{date_str}.csv"
@@ -1047,5 +1049,11 @@ if __name__ == "__main__":
     while analyzer.auto_analysis_running:
         time.sleep(1)
 
-    print("Analysis thread finished. Server running...")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("Analysis thread finished.")
+
+    if os.environ.get('GITHUB_ACTIONS'):
+        print("CI environment — exiting after analysis.")
+        sys.exit(0)
+
+    print("Server running...")
+    app.run(debug=False, host='0.0.0.0', port=5000)
