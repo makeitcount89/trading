@@ -145,17 +145,26 @@ class EnhancedFinancialDataManager:
             price_to_52w_low = (current_price / fifty_two_week_low) * 100
 
             rsi = self._calculate_rsi(hist['Close'])
+            macd_val, macd_signal, macd_hist = self._calculate_macd(hist['Close'])
+            bb_width = self._calculate_bb_width(hist['Close'])
+            breakout_score = self._calculate_breakout_score(hist, rsi, macd_hist, bb_width, info)
 
             sma_20 = hist['Close'].tail(20).mean()
             sma_50 = hist['Close'].tail(50).mean()
             price_vs_sma20 = ((current_price - sma_20) / sma_20) * 100
             price_vs_sma50 = ((current_price - sma_50) / sma_50) * 100
 
+            vol_5d_avg = hist['Volume'].tail(5).mean()
+            vol_5d_trend = round(vol_5d_avg / avg_volume, 2) if avg_volume > 0 else 1.0
+
             market_cap = info.get('marketCap', 'N/A')
             pe_ratio = info.get('trailingPE', 'N/A')
             pb_ratio = info.get('priceToBook', 'N/A')
             dividend_yield = info.get('dividendYield', 0) * 100 if info.get('dividendYield') else 0
             beta = info.get('beta', 'N/A')
+            float_shares = info.get('floatShares', 'N/A')
+            short_ratio = info.get('shortRatio', 'N/A')
+            shares_short_pct = round(info.get('shortPercentOfFloat', 0) * 100, 1) if info.get('shortPercentOfFloat') else 0
 
             sector = info.get('sector', 'N/A')
             industry = info.get('industry', 'N/A')
@@ -182,6 +191,13 @@ class EnhancedFinancialDataManager:
                 "pb_ratio": pb_ratio,
                 "dividend_yield_pct": round(dividend_yield, 2),
                 "beta": beta,
+                "float_shares": float_shares,
+                "short_ratio": round(short_ratio, 1) if isinstance(short_ratio, (int, float)) else 'N/A',
+                "shares_short_pct_float": shares_short_pct,
+                "macd_histogram": macd_hist if not pd.isna(macd_hist) else 'N/A',
+                "bb_width_pct": round(bb_width, 2) if not pd.isna(bb_width) else 'N/A',
+                "breakout_score": breakout_score,
+                "vol_5d_trend": vol_5d_trend,
                 "sector": sector,
                 "industry": industry,
                 "data_quality": "high"
@@ -207,6 +223,69 @@ class EnhancedFinancialDataManager:
         except:
             return pd.NaN
 
+    def _calculate_macd(self, prices, fast=12, slow=26, signal=9):
+        try:
+            exp1 = prices.ewm(span=fast, adjust=False).mean()
+            exp2 = prices.ewm(span=slow, adjust=False).mean()
+            macd = exp1 - exp2
+            signal_line = macd.ewm(span=signal, adjust=False).mean()
+            histogram = macd - signal_line
+            return round(macd.iloc[-1], 4), round(signal_line.iloc[-1], 4), round(histogram.iloc[-1], 4)
+        except:
+            return pd.NaN, pd.NaN, pd.NaN
+
+    def _calculate_bb_width(self, prices, window=20):
+        try:
+            sma = prices.rolling(window).mean()
+            std = prices.rolling(window).std()
+            upper = sma + 2 * std
+            lower = sma - 2 * std
+            width = (upper - lower) / sma * 100
+            return width.iloc[-1]
+        except:
+            return pd.NaN
+
+    def _calculate_breakout_score(self, hist, rsi, macd_hist, bb_width, info):
+        score = 0
+
+        # RSI in sweet zone 40-65 (not overbought, momentum building)
+        if not pd.isna(rsi) and 40 <= rsi <= 65:
+            score += 2
+
+        # Bollinger Band squeeze: current width in bottom 25th percentile → coiling spring
+        if not pd.isna(bb_width):
+            sma = hist['Close'].rolling(20).mean()
+            std = hist['Close'].rolling(20).std()
+            hist_widths = ((sma + 2 * std) - (sma - 2 * std)) / sma * 100
+            hist_widths = hist_widths.dropna()
+            if len(hist_widths) >= 10 and bb_width <= hist_widths.quantile(0.25):
+                score += 2
+
+        # MACD histogram positive → momentum flipping bullish
+        if not pd.isna(macd_hist) and macd_hist > 0:
+            score += 2
+
+        # Volume building: 5-day average ≥ 1.5x 20-day average
+        if len(hist) >= 20:
+            avg_vol_20 = hist['Volume'].tail(20).mean()
+            avg_vol_5 = hist['Volume'].tail(5).mean()
+            if avg_vol_20 > 0 and avg_vol_5 / avg_vol_20 >= 1.5:
+                score += 2
+
+        # Price within 15% of 52-week high → approaching breakout territory
+        if len(hist) > 0:
+            high_52w = hist['High'].max()
+            current = hist['Close'].iloc[-1]
+            if high_52w > 0 and current / high_52w >= 0.85:
+                score += 1
+
+        # Short ratio > 3 days to cover → squeeze potential on positive catalyst
+        short_ratio = info.get('shortRatio', 0) or 0
+        if isinstance(short_ratio, (int, float)) and short_ratio > 3:
+            score += 1
+
+        return min(score, 10)
+
     def _get_default_data(self):
         return {
             "current_price": 'N/A',
@@ -230,6 +309,13 @@ class EnhancedFinancialDataManager:
             "pb_ratio": 'N/A',
             "dividend_yield_pct": 0,
             "beta": 'N/A',
+            "float_shares": 'N/A',
+            "short_ratio": 'N/A',
+            "shares_short_pct_float": 0,
+            "macd_histogram": 'N/A',
+            "bb_width_pct": 'N/A',
+            "breakout_score": 0,
+            "vol_5d_trend": 'N/A',
             "sector": 'N/A',
             "industry": 'N/A',
             "data_quality": "low"
@@ -253,7 +339,9 @@ class GoogleSheetsManager:
                 'Market Impact', 'Risk Factors', 'Market Expectations Comparison',
                 'Reasoning Summary', 'Prediction Confidence', 'Current Price', 'Market Cap',
                 'PE Ratio', 'Volume Ratio', 'RSI', 'Price vs SMA20%', 'Volatility%',
-                'Sector', 'Industry', '52W High%', '52W Low%', 'Beta'
+                'Sector', 'Industry', '52W High%', '52W Low%', 'Beta',
+                'Explosive Move Potential', 'Rocket Thesis', 'Breakout Score',
+                'MACD Histogram', 'BB Width%', 'Short% Float', 'Short Ratio', 'Vol 5D Trend'
             ]
 
             payload = {
@@ -298,14 +386,14 @@ class EnhancedGeminiAnalyzer:
             raise Exception("GEMINI_API_KEY environment variable not set!")
         genai.configure(api_key=api_key)
 
-        try:
-            return genai.GenerativeModel('gemini-3-flash-preview')  # 2026 recommendation: prefer 1.5 over 2.5-flash if available
-        except Exception as e:
-            app.logger.warning(f"Failed to load gemini-1.5-flash, falling back: {e}")
+        for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-latest']:
             try:
-                return genai.GenerativeModel('gemini-1.5-flash-latest')
-            except Exception as e2:
-                raise Exception(f"Gemini model init failed: {e2}")
+                model = genai.GenerativeModel(model_name)
+                app.logger.info(f"Loaded Gemini model: {model_name}")
+                return model
+            except Exception as e:
+                app.logger.warning(f"Failed to load {model_name}: {e}")
+        raise Exception("All Gemini model variants failed to initialize")
 
     def start_auto_analysis(self):
         if not self.auto_analysis_running:
@@ -412,8 +500,8 @@ class EnhancedGeminiAnalyzer:
                     dropped_reasons['liquidity'] += 1
                     continue
 
-                # Market cap 50M – 1.5B AUD
-                if pd.isna(mc) or not (50000000 <= mc <= 1500000000):
+                # Market cap 20M – 3B AUD
+                if pd.isna(mc) or not (20000000 <= mc <= 3000000000):
                     keep_mask[idx] = False
                     dropped_reasons['market_cap'] += 1
                     continue
@@ -527,6 +615,11 @@ class EnhancedGeminiAnalyzer:
                         return str(value)
                     return 'N/A'
 
+                macd_h = financial_data['macd_histogram']
+                macd_label = 'Bullish' if isinstance(macd_h, float) and macd_h > 0 else 'Bearish'
+                bb_w = financial_data['bb_width_pct']
+                bb_label = 'SQUEEZE (coiling)' if isinstance(bb_w, float) and bb_w < 5 else 'Normal'
+
                 financial_summary = f"""
 **Current Financial Position:**
 - Ticker: {ticker}
@@ -536,14 +629,21 @@ class EnhancedGeminiAnalyzer:
 - 5-Day Change: {format_value(financial_data['five_day_change_pct'], '%')}
 - 30-Day Change: {format_value(financial_data['thirty_day_change_pct'], '%')}
 **Technical Indicators:**
-- RSI (14-day): {format_value(financial_data['rsi_14'])}
+- RSI (14-day): {format_value(financial_data['rsi_14'])} (40-65 = breakout sweet zone)
+- MACD Histogram: {format_value(financial_data['macd_histogram'])} → {macd_label}
+- Bollinger Band Width %: {format_value(financial_data['bb_width_pct'])} → {bb_label}
 - Price vs 20-day SMA: {format_value(financial_data['price_vs_sma20_pct'], '%')}
 - Price vs 50-day SMA: {format_value(financial_data['price_vs_sma50_pct'], '%')}
 - Annual Volatility: {format_value(financial_data['volatility_annual_pct'], '%')}
+- Breakout Score (0-10): {financial_data['breakout_score']} (RSI zone + BB squeeze + MACD + volume + position)
 **Volume Analysis:**
 - Current Volume: {format_value(financial_data['current_volume'], 'K')}
 - 20-Day Avg Volume: {format_value(financial_data['avg_volume_20d'], 'K')}
-- Volume Ratio: {format_value(financial_data['volume_ratio'])}
+- Volume Ratio (today): {format_value(financial_data['volume_ratio'])}x
+- 5-Day Volume Trend: {format_value(financial_data['vol_5d_trend'])}x vs 20d avg
+**Short Squeeze Indicators:**
+- Short % of Float: {format_value(financial_data['shares_short_pct_float'], '%')}
+- Short Ratio (days to cover): {financial_data['short_ratio']}
 **Valuation Metrics:**
 - Market Cap: {format_value(financial_data['market_cap'], '$')}
 - P/E Ratio: {format_value(financial_data['pe_ratio'])}
@@ -558,20 +658,25 @@ class EnhancedGeminiAnalyzer:
 """
 
                 prompt = f"""
-Analyze the attached PDF announcement for stock ticker {ticker} titled "{title}".
+Analyze the attached PDF announcement for ASX stock {ticker} titled "{title}".
 {financial_summary}
-**Analysis Instructions:**
-As a sophisticated financial analyst, perform a comprehensive analysis considering:
-1. Content Analysis: Extract key financial metrics, operational updates, strategic initiatives, and material changes.
-2. Technical Context: Consider RSI levels, price relative to moving averages, momentum, volume patterns.
-3. Market Context: How this fits broader market/sector conditions and valuation relative to peers.
-4. Surprise Factor: Does this deviate significantly from expectations?
-5. Risk Assessment: Identify risks that could block the predicted move.
-6. Quantitative Prediction: Estimate next-day % change based on news magnitude, historical reactions, technicals, sentiment.
 
-Output **strictly** in JSON with these exact keys:
+**Your Goal:** Identify whether this stock is about to make a significant move (5%+, ideally 10%+).
+
+**Analysis Steps:**
+1. **Catalyst Quality**: What is the core news? Is it a takeover bid, record earnings beat, major contract, significant discovery, or guidance upgrade? Rate how material this is.
+2. **Surprise Factor**: Does this news deviate significantly from what the market expected? Unexpected positives cause the biggest moves.
+3. **Technical Setup**: Given the Breakout Score, RSI zone, BB squeeze, and MACD signal — is the stock technically ready to explode? A coiling setup + strong catalyst = rocket.
+4. **Short Squeeze Potential**: High short % of float + positive catalyst = forced short covering amplifies the move. Assess this.
+5. **Retail FOMO Trigger**: Is this the type of news that retail investors will pile into? (Takeovers, record profits, gold/resource discoveries, brand-name companies beating expectations)
+6. **Volume Momentum**: Is smart money already accumulating (5-day volume trend elevated)?
+7. **Quantitative Prediction**: Estimate next-day % price change. Be aggressive and realistic — do not be conservative if the setup is genuinely strong.
+
+Output **strictly** in JSON with these exact keys (no extra text, no markdown):
 {{
   "bullish_score": <1-10 integer>,
+  "explosive_move_potential": <1-10 integer where 10=near-certain 10%+ move, 7+=strong candidate>,
+  "rocket_thesis": <string: max 2 sentences explaining specifically WHY this could be a multi-percent mover — catalyst + technical setup + squeeze potential>,
   "key_positive_factors": <string>,
   "financial_highlights": <string>,
   "future_outlook": <string>,
@@ -717,7 +822,15 @@ Output **strictly** in JSON with these exact keys:
                     fd.get('industry', ''),
                     fd.get('price_to_52w_high_pct', ''),
                     fd.get('price_to_52w_low_pct', ''),
-                    fd.get('beta', '')
+                    fd.get('beta', ''),
+                    analysis.get('explosive_move_potential', ''),
+                    analysis.get('rocket_thesis', ''),
+                    fd.get('breakout_score', ''),
+                    fd.get('macd_histogram', ''),
+                    fd.get('bb_width_pct', ''),
+                    fd.get('shares_short_pct_float', ''),
+                    fd.get('short_ratio', ''),
+                    fd.get('vol_5d_trend', ''),
                 ]
                 data_rows.append(row)
 
@@ -810,21 +923,31 @@ Output **strictly** in JSON with these exact keys:
                 except:
                     pass
 
-        self.current_analyses.sort(key=lambda x: x['analysis'].get('expected_daily_change_pct', 0), reverse=True)
+        def rocket_score(item):
+            a = item['analysis']
+            explosive = a.get('explosive_move_potential', 0) or 0
+            confidence = a.get('prediction_confidence', 1) or 1
+            breakout = item['financial_data'].get('breakout_score', 0) or 0
+            return explosive * confidence + breakout * 0.5
+
+        self.current_analyses.sort(key=rocket_score, reverse=True)
 
         sheets_success = self.append_to_google_sheets()
 
-        summary = "Bullish Announcements Summary:\n\n"
+        summary = "ROCKET FINDER - ASX Analysis Summary\n\n"
         for i, item in enumerate(self.current_analyses, 1):
             a = item['analysis']
             f = item['financial_data']
+            explosive = a.get('explosive_move_potential', 'N/A')
+            confidence = a.get('prediction_confidence', 'N/A')
+            breakout = f.get('breakout_score', 'N/A')
             summary += f"{i}. {item['ticker']} - {item['title']}\n"
-            summary += f"  Expected: {a.get('expected_daily_change_pct', 'N/A')}%\n"
-            summary += f"  Bullish: {a.get('bullish_score', 'N/A')}\n"
-            summary += f"  Surprise: {a.get('surprise_level', 'N/A')}\n"
-            summary += f"  Confidence: {a.get('prediction_confidence', 'N/A')}\n"
-            summary += f"  Price: ${f.get('current_price', 'N/A')}\n"
-            summary += "-" * 50 + "\n"
+            summary += f"  🚀 Explosive Move Potential: {explosive}/10  |  Breakout Score: {breakout}/10\n"
+            summary += f"  Rocket Thesis: {a.get('rocket_thesis', 'N/A')}\n"
+            summary += f"  Expected: {a.get('expected_daily_change_pct', 'N/A')}%  |  Confidence: {confidence}/5  |  Surprise: {a.get('surprise_level', 'N/A')}\n"
+            summary += f"  Short% Float: {f.get('shares_short_pct_float', 'N/A')}  |  MACD: {f.get('macd_histogram', 'N/A')}  |  BB Width: {f.get('bb_width_pct', 'N/A')}%\n"
+            summary += f"  Price: ${f.get('current_price', 'N/A')}  |  Market Cap: {f.get('market_cap', 'N/A')}\n"
+            summary += "-" * 60 + "\n"
 
         if sheets_success:
             summary += "\nSaved to Google Sheets ✓"
