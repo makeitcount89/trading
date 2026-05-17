@@ -2,7 +2,7 @@ name: Daily ASX Bullish Analysis
 
 on:
   schedule:
- #   - cron: '30 22 * * *'          # #22:30 UTC = 9:00 AM ACDT
+    - cron: '30 22 * * 1-5'        # 22:30 UTC = 9:00 AM ACDT, weekdays only
   workflow_dispatch:               # Allows manual trigger from GitHub UI
 
 jobs:

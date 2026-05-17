@@ -2,13 +2,14 @@
 import requests
 import time
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import csv
 import matplotlib.pyplot as plt
 import re
 from textwrap import wrap
 import pathlib
+import yfinance as yf
 
 # ASX announcement URL
 ASX_URL = "https://www.asx.com.au/asx/v2/statistics/todayAnns.do"
@@ -240,6 +241,26 @@ BEARISH_KEYWORDS = {
 }
 
 NEGATION_WORDS = {"not", "no", "never", "none"}
+
+
+def check_volume_buildup(ticker_ax):
+    """
+    Returns ratio of 3-day avg volume vs 20-day avg volume.
+    > 1.5 suggests institutional accumulation before announcement.
+    """
+    try:
+        stock = yf.Ticker(ticker_ax)
+        hist = stock.history(period="1mo")
+        if len(hist) < 10:
+            return 0.0
+        avg_vol_20 = hist['Volume'].iloc[:-3].mean()
+        avg_vol_3 = hist['Volume'].iloc[-3:].mean()
+        if avg_vol_20 <= 0:
+            return 0.0
+        return round(avg_vol_3 / avg_vol_20, 2)
+    except Exception:
+        return 0.0
+
 
 # PDF URL scraping functions
 HEADERS_PDF = {
@@ -523,7 +544,18 @@ if table:
         # Calculate sentiment
         print(f"\nAnalyzing: {ticker} - {title}")
         score = calculate_sentiment_score(title)
-        print(f"  Final score: {score}")
+
+        # Check for pre-announcement volume buildup (institutional accumulation signal)
+        vol_buildup = check_volume_buildup(full_ticker)
+        if vol_buildup >= 2.0:
+            score += 2.0
+            print(f"  Volume buildup bonus: {vol_buildup}x avg volume (+2.0)")
+        elif vol_buildup >= 1.5:
+            score += 1.0
+            print(f"  Volume buildup bonus: {vol_buildup}x avg volume (+1.0)")
+
+        score = round(score, 2)
+        print(f"  Final score: {score}  |  Volume buildup: {vol_buildup}x")
 
         # Filter 6: Only include positive sentiment
         if score <= 0:
@@ -534,7 +566,8 @@ if table:
             "ticker": ticker,
             "title": title,
             "date_time": date_time,
-            "sentiment_score": score
+            "sentiment_score": score,
+            "volume_buildup": vol_buildup
         })
 
 else:
@@ -565,7 +598,7 @@ today_str = datetime.now(pytz.timezone("Australia/Sydney")).strftime("%Y%m%d")
 csv_filename = f"bullish_announcements_{today_str}.csv"
 
 with open(csv_filename, "w", newline="", encoding="utf-8") as f:
-    fieldnames = ["rank", "date_time", "ticker", "pdf_url", "short_interest", "ChangePct", "title", "sentiment_score"]
+    fieldnames = ["rank", "date_time", "ticker", "pdf_url", "short_interest", "ChangePct", "title", "sentiment_score", "volume_buildup"]
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
 
@@ -574,7 +607,7 @@ with open(csv_filename, "w", newline="", encoding="utf-8") as f:
         title = ann["title"]
         full_ticker = ticker + ".AX"
         short_interest = short_interest_data.get(full_ticker, "N/A")
-        
+
         pdf_key = f"{ticker}_{title}"
         pdf_url = pdf_urls.get(pdf_key, "No PDF URL found")
 
@@ -588,14 +621,15 @@ with open(csv_filename, "w", newline="", encoding="utf-8") as f:
             "short_interest": short_interest,
             "ChangePct": formula,
             "title": title,
-            "sentiment_score": ann["sentiment_score"]
+            "sentiment_score": ann["sentiment_score"],
+            "volume_buildup": ann.get("volume_buildup", 0)
         })
 
 print(f"\n✓ Saved CSV file: {csv_filename}")
 
 # Generate chart for top 5
 if top_announcements:
-    labels = [f"{a['ticker']} ({a['sentiment_score']}): {a['title']}" for a in top_announcements]
+    labels = [f"{a['ticker']} (score:{a['sentiment_score']} vol:{a.get('volume_buildup',0)}x): {a['title']}" for a in top_announcements]
     scores = [a["sentiment_score"] for a in top_announcements]
     date_times = [f"{a['date_time'].strftime('%H:%M') if a['date_time'] else ''}" for a in top_announcements]
 
