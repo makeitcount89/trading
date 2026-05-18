@@ -1,6 +1,6 @@
 python-dotenv
 requests
-google-generativeai
+google-genai
 pandas
 flask
 flask-cors
