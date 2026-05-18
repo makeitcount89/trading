@@ -373,7 +373,7 @@ class GoogleSheetsManager:
 
 class EnhancedGeminiAnalyzer:
     def __init__(self):
-        self.model_name = 'gemini-1.5-flash-001'
+        self.model_name = 'gemini-1.5-flash'
         self.client = self.setup_gemini()
         self.current_analyses = []
         self.analysis_status = {"status": "idle", "progress": 0, "message": ""}
@@ -388,10 +388,10 @@ class EnhancedGeminiAnalyzer:
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
             raise Exception("GEMINI_API_KEY environment variable not set!")
-        # Use SDK default (v1beta) so fileData parts work; pin to 001 release
-        # since the bare 'gemini-1.5-flash' alias isn't resolved on v1beta
-        client = genai.Client(api_key=api_key)
-        self.model_name = 'gemini-1.5-flash-001'
+        # v1beta only has 2.x models; v1 has gemini-1.5-flash but no File API.
+        # Use inline base64 PDF data so we can use v1 + gemini-1.5-flash (1500 RPD).
+        client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(api_version='v1'))
+        self.model_name = 'gemini-1.5-flash'
         app.logger.info(f"Gemini client ready, model: {self.model_name}")
         return client
 
@@ -567,24 +567,19 @@ class EnhancedGeminiAnalyzer:
             return None
 
     def analyze_pdf_with_gemini(self, pdf_path, ticker, title, financial_data):
-        # Upload the PDF once — reuse the handle across all retries
-        uploaded_file = None
+        # Inline base64 — avoids the File API (v1beta-only) so we can use v1 + gemini-1.5-flash
         try:
-            uploaded_file = self.client.files.upload(
-                file=pdf_path,
-                config=genai_types.UploadFileConfig(
-                    display_name=f"{ticker}_announcement.pdf",
-                    mime_type='application/pdf'
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+            pdf_part = genai_types.Part(
+                inline_data=genai_types.Blob(
+                    mime_type='application/pdf',
+                    data=base64.b64encode(pdf_bytes).decode('utf-8')
                 )
             )
-            while uploaded_file.state.name == "PROCESSING":
-                time.sleep(2)
-                uploaded_file = self.client.files.get(name=uploaded_file.name)
-            if uploaded_file.state.name == "FAILED":
-                raise Exception("File processing failed")
-            app.logger.info(f"Uploaded PDF for {ticker}")
-        except Exception as upload_error:
-            app.logger.error(f"PDF upload failed for {ticker}: {upload_error}")
+            app.logger.info(f"Loaded PDF for {ticker} ({len(pdf_bytes)//1024}KB inline)")
+        except Exception as load_error:
+            app.logger.error(f"PDF load failed for {ticker}: {load_error}")
             return None
 
         # Build prompt once — no need to rebuild on every retry
@@ -679,44 +674,34 @@ Output **strictly** in JSON with these exact keys (no extra text, no markdown):
         delay = 60  # start at 60s to ensure the RPM window resets
         result = None
 
-        try:
-            for i in range(retries):
-                try:
-                    response = self.client.models.generate_content(
-                        model=self.model_name,
-                        contents=[uploaded_file, prompt]
-                    )
-                    response_text = response.text.strip()
-                    if response_text.startswith('```json'):
-                        response_text = response_text[7:-3].strip()
-                    elif response_text.startswith('```'):
-                        response_text = response_text[3:-3].strip()
-                    result = json.loads(response_text)
-                    app.logger.info(f"Successfully analyzed {ticker}")
-                    break
-                except Exception as e:
-                    error_str = str(e).lower()
-                    if "429" in error_str or "quota" in error_str or "rate limit" in error_str or "resource_exhausted" in error_str:
-                        app.logger.warning(f"Rate limit hit for {ticker}: {e}. Waiting {delay}s ({i+1}/{retries})")
-                        time.sleep(delay)
-                        delay = min(delay * 2, 120)
-                    else:
-                        app.logger.error(f"Analysis error for {ticker} (attempt {i+1}): {e}")
-                        if i == retries - 1:
-                            break
-                        time.sleep(5)
+        for i in range(retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=[pdf_part, prompt]
+                )
+                response_text = response.text.strip()
+                if response_text.startswith('```json'):
+                    response_text = response_text[7:-3].strip()
+                elif response_text.startswith('```'):
+                    response_text = response_text[3:-3].strip()
+                result = json.loads(response_text)
+                app.logger.info(f"Successfully analyzed {ticker}")
+                break
+            except Exception as e:
+                error_str = str(e).lower()
+                if "429" in error_str or "quota" in error_str or "rate limit" in error_str or "resource_exhausted" in error_str:
+                    app.logger.warning(f"Rate limit hit for {ticker}: {e}. Waiting {delay}s ({i+1}/{retries})")
+                    time.sleep(delay)
+                    delay = min(delay * 2, 120)
+                else:
+                    app.logger.error(f"Analysis error for {ticker} (attempt {i+1}): {e}")
+                    if i == retries - 1:
+                        break
+                    time.sleep(5)
 
-            if result is None:
-                app.logger.error(f"Failed to analyze {ticker} after {retries} attempts")
-
-        finally:
-            # Always clean up the uploaded file, whether we succeeded or failed
-            if uploaded_file:
-                try:
-                    self.client.files.delete(name=uploaded_file.name)
-                    app.logger.debug(f"Cleaned up uploaded file for {ticker}")
-                except:
-                    pass
+        if result is None:
+            app.logger.error(f"Failed to analyze {ticker} after {retries} attempts")
 
         return result
 
