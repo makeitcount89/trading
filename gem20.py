@@ -2,7 +2,8 @@ from dotenv import load_dotenv
 import os
 import sys
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
@@ -372,7 +373,8 @@ class GoogleSheetsManager:
 
 class EnhancedGeminiAnalyzer:
     def __init__(self):
-        self.model = self.setup_gemini()
+        self.model_name = 'gemini-1.5-flash'
+        self.client = self.setup_gemini()
         self.current_analyses = []
         self.analysis_status = {"status": "idle", "progress": 0, "message": ""}
         self.auto_analysis_running = False
@@ -386,16 +388,11 @@ class EnhancedGeminiAnalyzer:
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
             raise Exception("GEMINI_API_KEY environment variable not set!")
-        genai.configure(api_key=api_key)
-
-        for model_name in ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-latest']:
-            try:
-                model = genai.GenerativeModel(model_name)
-                app.logger.info(f"Loaded Gemini model: {model_name}")
-                return model
-            except Exception as e:
-                app.logger.warning(f"Failed to load {model_name}: {e}")
-        raise Exception("All Gemini model variants failed to initialize")
+        client = genai.Client(api_key=api_key)
+        # gemini-1.5-flash: 1500 RPD free tier (vs 200 RPD for 2.0-flash)
+        self.model_name = 'gemini-1.5-flash'
+        app.logger.info(f"Gemini client ready, model: {self.model_name}")
+        return client
 
     def start_auto_analysis(self):
         if not self.auto_analysis_running:
@@ -544,10 +541,12 @@ class EnhancedGeminiAnalyzer:
                 app.logger.warning(f"No announcements remain after filtering")
                 return None
 
-            if 'sentiment_score' in df.columns:
+            # Drop duplicate tickers — keep highest sentiment score per ticker
+            if 'sentiment_score' in valid_announcements.columns:
                 valid_announcements = valid_announcements.sort_values('sentiment_score', ascending=False)
+            valid_announcements = valid_announcements.drop_duplicates(subset=['ticker'], keep='first')
 
-            app.logger.info(f"Ready to analyze {len(valid_announcements)} stocks")
+            app.logger.info(f"Ready to analyze {len(valid_announcements)} stocks (after dedup)")
             return valid_announcements
 
         except Exception as e:
@@ -569,29 +568,23 @@ class EnhancedGeminiAnalyzer:
     def analyze_pdf_with_gemini(self, pdf_path, ticker, title, financial_data):
         # Upload the PDF once — reuse the handle across all retries
         uploaded_file = None
-        use_file_api = False
         try:
-            uploaded_file = genai.upload_file(
-                path=pdf_path,
-                display_name=f"{ticker}_announcement.pdf"
+            uploaded_file = self.client.files.upload(
+                file=pdf_path,
+                config=genai_types.UploadFileConfig(
+                    display_name=f"{ticker}_announcement.pdf",
+                    mime_type='application/pdf'
+                )
             )
             while uploaded_file.state.name == "PROCESSING":
                 time.sleep(2)
-                uploaded_file = genai.get_file(uploaded_file.name)
+                uploaded_file = self.client.files.get(name=uploaded_file.name)
             if uploaded_file.state.name == "FAILED":
                 raise Exception("File processing failed")
-            file_ref = uploaded_file
-            use_file_api = True
             app.logger.info(f"Uploaded PDF for {ticker}")
         except Exception as upload_error:
-            app.logger.warning(f"File upload failed for {ticker}, using inline: {upload_error}")
-            with open(pdf_path, 'rb') as pdf_file:
-                pdf_data = pdf_file.read()
-            if len(pdf_data) > 20 * 1024 * 1024:
-                app.logger.error(f"PDF too large for {ticker}: {len(pdf_data)} bytes")
-                return None
-            file_ref = {'mime_type': 'application/pdf', 'data': pdf_data}
-            use_file_api = False
+            app.logger.error(f"PDF upload failed for {ticker}: {upload_error}")
+            return None
 
         # Build prompt once — no need to rebuild on every retry
         def format_value(value, suffix=''):
@@ -688,7 +681,10 @@ Output **strictly** in JSON with these exact keys (no extra text, no markdown):
         try:
             for i in range(retries):
                 try:
-                    response = self.model.generate_content([file_ref, prompt])
+                    response = self.client.models.generate_content(
+                        model=self.model_name,
+                        contents=[uploaded_file, prompt]
+                    )
                     response_text = response.text.strip()
                     if response_text.startswith('```json'):
                         response_text = response_text[7:-3].strip()
@@ -699,8 +695,8 @@ Output **strictly** in JSON with these exact keys (no extra text, no markdown):
                     break
                 except Exception as e:
                     error_str = str(e).lower()
-                    if "429" in error_str or "quota" in error_str or "rate limit" in error_str:
-                        app.logger.warning(f"Rate limit hit for {ticker}. Waiting {delay}s ({i+1}/{retries})")
+                    if "429" in error_str or "quota" in error_str or "rate limit" in error_str or "resource_exhausted" in error_str:
+                        app.logger.warning(f"Rate limit hit for {ticker}: {e}. Waiting {delay}s ({i+1}/{retries})")
                         time.sleep(delay)
                         delay = min(delay * 2, 120)
                     else:
@@ -714,9 +710,9 @@ Output **strictly** in JSON with these exact keys (no extra text, no markdown):
 
         finally:
             # Always clean up the uploaded file, whether we succeeded or failed
-            if use_file_api and uploaded_file:
+            if uploaded_file:
                 try:
-                    genai.delete_file(uploaded_file.name)
+                    self.client.files.delete(name=uploaded_file.name)
                     app.logger.debug(f"Cleaned up uploaded file for {ticker}")
                 except:
                     pass
