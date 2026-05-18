@@ -388,8 +388,8 @@ class EnhancedGeminiAnalyzer:
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
             raise Exception("GEMINI_API_KEY environment variable not set!")
-        client = genai.Client(api_key=api_key)
-        # gemini-1.5-flash: 1500 RPD free tier (vs 200 RPD for 2.0-flash)
+        # Force v1 (stable) endpoint — gemini-1.5-flash isn't on v1beta (SDK default)
+        client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(api_version='v1'))
         self.model_name = 'gemini-1.5-flash'
         app.logger.info(f"Gemini client ready, model: {self.model_name}")
         return client
