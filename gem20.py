@@ -373,7 +373,7 @@ class GoogleSheetsManager:
 
 class EnhancedGeminiAnalyzer:
     def __init__(self):
-        self.model_name = 'gemini-1.5-flash'
+        self.model_name = 'gemini-1.5-flash-001'
         self.client = self.setup_gemini()
         self.current_analyses = []
         self.analysis_status = {"status": "idle", "progress": 0, "message": ""}
@@ -388,9 +388,10 @@ class EnhancedGeminiAnalyzer:
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
             raise Exception("GEMINI_API_KEY environment variable not set!")
-        # Force v1 (stable) endpoint — gemini-1.5-flash isn't on v1beta (SDK default)
-        client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(api_version='v1'))
-        self.model_name = 'gemini-1.5-flash'
+        # Use SDK default (v1beta) so fileData parts work; pin to 001 release
+        # since the bare 'gemini-1.5-flash' alias isn't resolved on v1beta
+        client = genai.Client(api_key=api_key)
+        self.model_name = 'gemini-1.5-flash-001'
         app.logger.info(f"Gemini client ready, model: {self.model_name}")
         return client
 
