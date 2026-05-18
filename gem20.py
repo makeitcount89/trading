@@ -373,7 +373,7 @@ class GoogleSheetsManager:
 
 class EnhancedGeminiAnalyzer:
     def __init__(self):
-        self.model_name = 'gemini-1.5-flash'
+        self.model_name = 'gemini-2.0-flash'
         self.client = self.setup_gemini()
         self.current_analyses = []
         self.analysis_status = {"status": "idle", "progress": 0, "message": ""}
@@ -388,10 +388,10 @@ class EnhancedGeminiAnalyzer:
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
             raise Exception("GEMINI_API_KEY environment variable not set!")
-        # v1beta only has 2.x models; v1 has gemini-1.5-flash but no File API.
-        # Use inline base64 PDF data so we can use v1 + gemini-1.5-flash (1500 RPD).
-        client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(api_version='v1'))
-        self.model_name = 'gemini-1.5-flash'
+        # gemini-1.5-flash is not available on this API key (404 on both v1/v1beta).
+        # gemini-2.0-flash works on v1beta; 200 RPD is sufficient for ~5 stocks/day.
+        client = genai.Client(api_key=api_key)
+        self.model_name = 'gemini-2.0-flash'
         app.logger.info(f"Gemini client ready, model: {self.model_name}")
         return client
 
