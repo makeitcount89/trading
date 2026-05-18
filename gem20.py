@@ -373,7 +373,7 @@ class GoogleSheetsManager:
 
 class EnhancedGeminiAnalyzer:
     def __init__(self):
-        self.model_name = 'gemini-1.5-flash'
+        self.model_name = 'gemini-2.0-flash'
         self.client = self.setup_gemini()
         self.current_analyses = []
         self.analysis_status = {"status": "idle", "progress": 0, "message": ""}
@@ -389,8 +389,8 @@ class EnhancedGeminiAnalyzer:
         if not api_key:
             raise Exception("GEMINI_API_KEY environment variable not set!")
         client = genai.Client(api_key=api_key)
-        # gemini-1.5-flash: 1500 RPD free tier (vs 200 RPD for 2.0-flash)
-        self.model_name = 'gemini-1.5-flash'
+        # google-genai SDK v2+ uses v1beta endpoint; gemini-2.0-flash is available there
+        self.model_name = 'gemini-2.0-flash'
         app.logger.info(f"Gemini client ready, model: {self.model_name}")
         return client
 
