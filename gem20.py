@@ -567,62 +567,50 @@ class EnhancedGeminiAnalyzer:
             return None
 
     def analyze_pdf_with_gemini(self, pdf_path, ticker, title, financial_data):
-        retries = 5
-        delay = 5
-        for i in range(retries):
-            try:
-                try:
-                    uploaded_file = genai.upload_file(
-                        path=pdf_path,
-                        display_name=f"{ticker}_announcement.pdf"
-                    )
-
-                    while uploaded_file.state.name == "PROCESSING":
-                        time.sleep(2)
-                        uploaded_file = genai.get_file(uploaded_file.name)
-
-                    if uploaded_file.state.name == "FAILED":
-                        raise Exception("File processing failed")
-
-                    file_ref = uploaded_file
-                    use_file_api = True
-                    app.logger.info(f"Successfully uploaded PDF for {ticker} using File API")
-
-                except Exception as upload_error:
-                    app.logger.warning(f"File upload failed for {ticker}, using inline: {upload_error}")
-                    with open(pdf_path, 'rb') as pdf_file:
-                        pdf_data = pdf_file.read()
-
-                    if len(pdf_data) > 20 * 1024 * 1024:
-                        app.logger.error(f"PDF too large for {ticker}: {len(pdf_data)} bytes")
-                        return None
-
-                    file_ref = {
-                        'mime_type': 'application/pdf',
-                        'data': pdf_data
-                    }
-                    use_file_api = False
-                    app.logger.info(f"Using inline PDF data for {ticker} ({len(pdf_data)} bytes)")
-
+        # Upload the PDF once — reuse the handle across all retries
+        uploaded_file = None
+        use_file_api = False
+        try:
+            uploaded_file = genai.upload_file(
+                path=pdf_path,
+                display_name=f"{ticker}_announcement.pdf"
+            )
+            while uploaded_file.state.name == "PROCESSING":
                 time.sleep(2)
+                uploaded_file = genai.get_file(uploaded_file.name)
+            if uploaded_file.state.name == "FAILED":
+                raise Exception("File processing failed")
+            file_ref = uploaded_file
+            use_file_api = True
+            app.logger.info(f"Uploaded PDF for {ticker}")
+        except Exception as upload_error:
+            app.logger.warning(f"File upload failed for {ticker}, using inline: {upload_error}")
+            with open(pdf_path, 'rb') as pdf_file:
+                pdf_data = pdf_file.read()
+            if len(pdf_data) > 20 * 1024 * 1024:
+                app.logger.error(f"PDF too large for {ticker}: {len(pdf_data)} bytes")
+                return None
+            file_ref = {'mime_type': 'application/pdf', 'data': pdf_data}
+            use_file_api = False
 
-                def format_value(value, suffix=''):
-                    if isinstance(value, (int, float)) and not pd.isna(value):
-                        if suffix == '$':
-                            return f"${value:,.2f}"
-                        elif suffix == '%':
-                            return f"{value:.2f}%"
-                        elif suffix == 'K':
-                            return f"{value:,}"
-                        return str(value)
-                    return 'N/A'
+        # Build prompt once — no need to rebuild on every retry
+        def format_value(value, suffix=''):
+            if isinstance(value, (int, float)) and not pd.isna(value):
+                if suffix == '$':
+                    return f"${value:,.2f}"
+                elif suffix == '%':
+                    return f"{value:.2f}%"
+                elif suffix == 'K':
+                    return f"{value:,}"
+                return str(value)
+            return 'N/A'
 
-                macd_h = financial_data['macd_histogram']
-                macd_label = 'Bullish' if isinstance(macd_h, float) and macd_h > 0 else 'Bearish'
-                bb_w = financial_data['bb_width_pct']
-                bb_label = 'SQUEEZE (coiling)' if isinstance(bb_w, float) and bb_w < 5 else 'Normal'
+        macd_h = financial_data['macd_histogram']
+        macd_label = 'Bullish' if isinstance(macd_h, float) and macd_h > 0 else 'Bearish'
+        bb_w = financial_data['bb_width_pct']
+        bb_label = 'SQUEEZE (coiling)' if isinstance(bb_w, float) and bb_w < 5 else 'Normal'
 
-                financial_summary = f"""
+        financial_summary = f"""
 **Current Financial Position:**
 - Ticker: {ticker}
 - Current Price: {format_value(financial_data['current_price'], '$')}
@@ -659,7 +647,7 @@ class EnhancedGeminiAnalyzer:
 - 52W Low Distance: {format_value(financial_data['price_to_52w_low_pct'], '%')}
 """
 
-                prompt = f"""
+        prompt = f"""
 Analyze the attached PDF announcement for ASX stock {ticker} titled "{title}".
 {financial_summary}
 
@@ -692,39 +680,48 @@ Output **strictly** in JSON with these exact keys (no extra text, no markdown):
 }}
 """
 
-                response = self.model.generate_content([file_ref, prompt])
+        # Retry only the generate_content call — file is already uploaded
+        retries = 5
+        delay = 60  # start at 60s to ensure the RPM window resets
+        result = None
 
-                if use_file_api:
-                    try:
-                        genai.delete_file(uploaded_file.name)
-                        app.logger.debug(f"Cleaned up file for {ticker}")
-                    except:
-                        pass
+        try:
+            for i in range(retries):
+                try:
+                    response = self.model.generate_content([file_ref, prompt])
+                    response_text = response.text.strip()
+                    if response_text.startswith('```json'):
+                        response_text = response_text[7:-3].strip()
+                    elif response_text.startswith('```'):
+                        response_text = response_text[3:-3].strip()
+                    result = json.loads(response_text)
+                    app.logger.info(f"Successfully analyzed {ticker}")
+                    break
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "429" in error_str or "quota" in error_str or "rate limit" in error_str:
+                        app.logger.warning(f"Rate limit hit for {ticker}. Waiting {delay}s ({i+1}/{retries})")
+                        time.sleep(delay)
+                        delay = min(delay * 2, 120)
+                    else:
+                        app.logger.error(f"Analysis error for {ticker} (attempt {i+1}): {e}")
+                        if i == retries - 1:
+                            break
+                        time.sleep(5)
 
-                response_text = response.text.strip()
-                if response_text.startswith('```json'):
-                    response_text = response_text[7:-3].strip()
-                elif response_text.startswith('```'):
-                    response_text = response_text[3:-3].strip()
+            if result is None:
+                app.logger.error(f"Failed to analyze {ticker} after {retries} attempts")
 
-                analysis_json = json.loads(response_text)
-                app.logger.info(f"Successfully analyzed {ticker}")
-                return analysis_json
+        finally:
+            # Always clean up the uploaded file, whether we succeeded or failed
+            if use_file_api and uploaded_file:
+                try:
+                    genai.delete_file(uploaded_file.name)
+                    app.logger.debug(f"Cleaned up uploaded file for {ticker}")
+                except:
+                    pass
 
-            except Exception as e:
-                error_str = str(e).lower()
-                if "429" in error_str or "quota" in error_str or "rate limit" in error_str:
-                    app.logger.warning(f"Rate limit hit for {ticker}. Waiting {delay}s ({i+1}/{retries})")
-                    time.sleep(delay)
-                    delay = min(delay * 2, 60)
-                else:
-                    app.logger.error(f"Analysis error for {ticker} (attempt {i+1}): {e}")
-                    if i == retries - 1:
-                        return None
-                    time.sleep(5)
-
-        app.logger.error(f"Failed to analyze {ticker} after {retries} attempts")
-        return None
+        return result
 
     def create_results_csv(self):
         try:
@@ -924,6 +921,11 @@ Output **strictly** in JSON with these exact keys (no extra text, no markdown):
                     os.unlink(pdf_path)
                 except:
                     pass
+
+            # Wait between stocks so the Gemini RPM window has time to recover
+            if idx < total - 1:
+                app.logger.info(f"Waiting 60s before next stock to respect rate limits...")
+                time.sleep(60)
 
         def rocket_score(item):
             a = item['analysis']
